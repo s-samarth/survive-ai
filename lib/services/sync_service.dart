@@ -1,0 +1,143 @@
+import 'dart:convert';
+import 'dart:io';
+import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
+import 'package:http/http.dart' as http;
+import 'package:path_provider/path_provider.dart';
+import 'package:path/path.dart' as p;
+import 'package:shared_preferences/shared_preferences.dart';
+import '../models/doc_manifest.dart';
+import 'database_service.dart';
+import 'chunker_service.dart';
+
+// Replace with your actual GitHub raw manifest URL once the docs repo is created.
+const _manifestUrl =
+    'https://raw.githubusercontent.com/survive-ai/survive-ai-docs/main/manifest.json';
+
+/// Handles WiFi-gated syncing of survival docs and model metadata from GitHub.
+///
+/// On each app launch (or manual trigger):
+/// 1. Check connectivity — abort if no internet.
+/// 2. Fetch manifest.json from GitHub.
+/// 3. For each doc in manifest, compare SHA-256 with local DB checksum.
+/// 4. Download only changed or new docs.
+/// 5. Verify checksum, write to disk, ingest into SQLite.
+class SyncService {
+  final DatabaseService _db;
+  final ChunkerService _chunker;
+
+  SyncService(this._db, this._chunker);
+
+  /// Returns true if the device has an active internet connection.
+  Future<bool> isOnline() async {
+    final result = await Connectivity().checkConnectivity();
+    return result.any((r) => r != ConnectivityResult.none);
+  }
+
+  /// Check if a newer manifest is available without downloading docs.
+  Future<SyncStatus> checkForUpdates() async {
+    if (!await isOnline()) return SyncStatus.offline;
+
+    try {
+      final manifest = await _fetchManifest();
+      final prefs = await SharedPreferences.getInstance();
+      final localVersion = prefs.getString('manifest_version') ?? '';
+      return manifest.version != localVersion ? SyncStatus.updatesAvailable : SyncStatus.upToDate;
+    } catch (_) {
+      return SyncStatus.error;
+    }
+  }
+
+  /// Full sync: fetch manifest, download changed docs, re-index.
+  ///
+  /// [onProgress] — called with (downloaded, total) doc counts.
+  Future<SyncResult> syncNow({void Function(int done, int total)? onProgress}) async {
+    if (!await isOnline()) return SyncResult(status: SyncStatus.offline, updatedDocs: 0);
+
+    try {
+      final manifest = await _fetchManifest();
+      final docsDir = await _docsDirectory();
+      var updated = 0;
+
+      for (var i = 0; i < manifest.docs.length; i++) {
+        final entry = manifest.docs[i];
+        final localChecksum = await _db.getDocChecksum(entry.id);
+
+        if (localChecksum == entry.sha256) {
+          onProgress?.call(i + 1, manifest.docs.length);
+          continue; // Already up to date
+        }
+
+        final content = await _downloadDoc(entry.url);
+        _verifyChecksum(content, entry.sha256, entry.filename);
+
+        // Write to disk
+        final dir = Directory(p.join(docsDir.path, entry.topic));
+        await dir.create(recursive: true);
+        final file = File(p.join(dir.path, p.basename(entry.filename)));
+        await file.writeAsString(content);
+
+        // Ingest into SQLite
+        await _db.deleteChunksForDoc(entry.id);
+        final chunks = _chunker.chunk(content, entry.id, entry.topic);
+        await _db.insertChunks(chunks);
+        await _db.upsertDoc({
+          'id': entry.id,
+          'filename': entry.filename,
+          'topic': entry.topic,
+          'version': entry.version,
+          'checksum': entry.sha256,
+          'last_synced': DateTime.now().millisecondsSinceEpoch,
+        });
+
+        updated++;
+        onProgress?.call(i + 1, manifest.docs.length);
+      }
+
+      // Persist manifest version
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('manifest_version', manifest.version);
+      await prefs.setInt('last_sync_ms', DateTime.now().millisecondsSinceEpoch);
+
+      return SyncResult(status: SyncStatus.upToDate, updatedDocs: updated);
+    } catch (e) {
+      return SyncResult(status: SyncStatus.error, updatedDocs: 0, error: e.toString());
+    }
+  }
+
+  Future<DocManifest> _fetchManifest() async {
+    final response = await http.get(Uri.parse(_manifestUrl));
+    if (response.statusCode != 200) throw Exception('Failed to fetch manifest: ${response.statusCode}');
+    return DocManifest.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+  }
+
+  Future<String> _downloadDoc(String url) async {
+    final response = await http.get(Uri.parse(url));
+    if (response.statusCode != 200) throw Exception('Failed to download doc: $url');
+    return response.body;
+  }
+
+  void _verifyChecksum(String content, String expectedSha256, String filename) {
+    final actual = sha256.convert(utf8.encode(content)).toString();
+    if (actual != expectedSha256) {
+      throw Exception('Checksum mismatch for $filename: expected $expectedSha256, got $actual');
+    }
+  }
+
+  Future<Directory> _docsDirectory() async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final dir = Directory(p.join(appDir.path, 'docs'));
+    await dir.create(recursive: true);
+    return dir;
+  }
+}
+
+enum SyncStatus { offline, upToDate, updatesAvailable, error }
+
+class SyncResult {
+  final SyncStatus status;
+  final int updatedDocs;
+  final String? error;
+
+  const SyncResult({required this.status, required this.updatedDocs, this.error});
+}
