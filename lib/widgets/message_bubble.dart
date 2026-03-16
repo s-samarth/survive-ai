@@ -1,3 +1,4 @@
+import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/chat_message.dart';
 
@@ -5,7 +6,10 @@ import '../models/chat_message.dart';
 ///
 /// User messages appear right-aligned in a filled bubble.
 /// Assistant messages appear left-aligned in a surface-colored bubble.
-/// [isStreaming] adds a blinking cursor while tokens are still arriving.
+///
+/// While [isStreaming] is true and no content has arrived yet, a three-dot
+/// typing indicator is shown (like ChatGPT / iMessage). Once tokens begin
+/// streaming in, text is displayed with a blinking cursor at the end.
 class MessageBubble extends StatelessWidget {
   final ChatMessage message;
   final bool isStreaming;
@@ -24,6 +28,9 @@ class MessageBubble extends StatelessWidget {
 
     final bgColor = _isUser ? colorScheme.primary : colorScheme.surfaceContainerHighest;
     final textColor = _isUser ? colorScheme.onPrimary : colorScheme.onSurface;
+
+    final showTypingIndicator = isStreaming && message.content.isEmpty;
+    final showCursor = isStreaming && message.content.isNotEmpty;
 
     return Padding(
       padding: EdgeInsets.only(
@@ -45,29 +52,115 @@ class MessageBubble extends StatelessWidget {
               bottomRight: Radius.circular(_isUser ? 4 : 16),
             ),
           ),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Flexible(
-                child: Text(
-                  message.content.isEmpty && isStreaming ? '…' : message.content,
-                  style: TextStyle(color: textColor, fontSize: 15),
+          child: showTypingIndicator
+              ? _TypingIndicator(color: textColor)
+              : Row(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    Flexible(
+                      child: Text(
+                        message.content,
+                        style: TextStyle(color: textColor, fontSize: 15),
+                      ),
+                    ),
+                    if (showCursor) ...[
+                      const SizedBox(width: 4),
+                      _BlinkingCursor(color: textColor),
+                    ],
+                  ],
                 ),
-              ),
-              if (isStreaming) ...[
-                const SizedBox(width: 4),
-                _BlinkingCursor(color: textColor),
-              ],
-            ],
-          ),
         ),
       ),
     );
   }
 }
 
-/// Animated blinking cursor shown during streaming generation.
+/// Animated three-dot typing indicator shown while waiting for the first token.
+///
+/// Each dot bounces up in a staggered wave (delays: 0 ms, 150 ms, 300 ms),
+/// matching the visual pattern used by ChatGPT, WhatsApp, and iMessage.
+class _TypingIndicator extends StatefulWidget {
+  final Color color;
+  const _TypingIndicator({required this.color});
+
+  @override
+  State<_TypingIndicator> createState() => _TypingIndicatorState();
+}
+
+class _TypingIndicatorState extends State<_TypingIndicator>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _ctrl;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1000),
+    )..repeat();
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SizedBox(
+      height: 20,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          _BounceDot(controller: _ctrl, delay: 0.00, color: widget.color),
+          const SizedBox(width: 5),
+          _BounceDot(controller: _ctrl, delay: 0.15, color: widget.color),
+          const SizedBox(width: 5),
+          _BounceDot(controller: _ctrl, delay: 0.30, color: widget.color),
+        ],
+      ),
+    );
+  }
+}
+
+class _BounceDot extends StatelessWidget {
+  final AnimationController controller;
+  final double delay;
+  final Color color;
+
+  const _BounceDot({
+    required this.controller,
+    required this.delay,
+    required this.color,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, child) {
+        // Normalise to [0,1) with stagger, then compute a half-sine bounce so
+        // the dot rises smoothly in the first half and rests in the second half.
+        final t = ((controller.value - delay) % 1.0 + 1.0) % 1.0;
+        final bounce = t < 0.5 ? sin(t * pi * 2) : 0.0;
+        return Transform.translate(
+          offset: Offset(0, -bounce * 5),
+          child: child,
+        );
+      },
+      child: Container(
+        width: 8,
+        height: 8,
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      ),
+    );
+  }
+}
+
+/// Animated blinking cursor shown while tokens are still streaming in.
 class _BlinkingCursor extends StatefulWidget {
   final Color color;
   const _BlinkingCursor({required this.color});

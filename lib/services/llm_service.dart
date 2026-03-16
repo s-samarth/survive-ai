@@ -40,22 +40,25 @@ class LlmService {
       preferredBackend: PreferredBackend.gpu,
     );
 
-    _session = await _model!.createSession(
-      temperature: 0.7,
-      topK: 40,
-    );
-
     _isLoaded = true;
   }
 
   /// Run inference and stream tokens as they are generated.
   ///
-  /// [prompt] — the full formatted prompt string.
+  /// [prompt] — the full formatted prompt string (includes full history).
   /// Yields token strings one at a time.
+  ///
+  /// A fresh session is created before each inference and the previous one is
+  /// closed first. This frees the KV (key-value attention) cache between turns,
+  /// keeping memory usage flat regardless of conversation length. The model
+  /// weights in [_model] remain loaded — only the per-turn cache is recycled.
   Stream<String> chat({required String prompt}) async* {
-    if (!_isLoaded || _session == null) {
+    if (!_isLoaded || _model == null) {
       throw StateError('Model not loaded. Call loadModel() first.');
     }
+
+    await _session?.close();
+    _session = await _model!.createSession(temperature: 0.7, topK: 40);
 
     await _session!.addQueryChunk(Message(text: prompt));
     yield* _session!.getResponseAsync();
