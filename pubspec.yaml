@@ -37,8 +37,6 @@ dependencies:
   flutter_riverpod: ^2.6.1
   riverpod_annotation: ^2.6.1
 
-  # On-device LLM inference via llama.cpp FFI
-  llama_cpp_dart: ^0.2.2
 
   # SQLite — docs database, FTS5 full-text search, action plan storage
   sqflite: ^2.4.2
@@ -65,6 +63,8 @@ dependencies:
 
   # UUID generation for chunk IDs and action plan IDs
   uuid: ^4.5.1
+  sqlite3_flutter_libs: ^0.6.0+eol
+  flutter_gemma: ^0.12.5
 
 dev_dependencies:
   flutter_test:
@@ -86,9 +86,13 @@ flutter:
   uses-material-design: true
 
   # To add assets to your application, add an assets section, like this:
-  # assets:
-  #   - images/a_dot_burr.jpeg
-  #   - images/a_dot_ham.jpeg
+  assets:
+    - docs/survival_guides/war.md
+    - docs/survival_guides/medical.md
+    - docs/survival_guides/jungle.md
+    - docs/survival_guides/desert.md
+    - docs/survival_guides/urban.md
+    - docs/survival_guides/general.md
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

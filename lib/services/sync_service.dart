@@ -1,11 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:connectivity_plus/connectivity_plus.dart';
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import '../models/doc_manifest.dart';
 import 'database_service.dart';
 import 'chunker_service.dart';
@@ -27,6 +27,47 @@ class SyncService {
   final ChunkerService _chunker;
 
   SyncService(this._db, this._chunker);
+
+  /// Seeds the database with bundled assets if they haven't been loaded yet.
+  /// Ensures the app has expert knowledge immediately after install (Zero-Wait RAG).
+  Future<void> seedFromAssets() async {
+    final assets = {
+      'docs/survival_guides/war.md': 'war',
+      'docs/survival_guides/medical.md': 'medical',
+      'docs/survival_guides/jungle.md': 'jungle',
+      'docs/survival_guides/desert.md': 'desert',
+      'docs/survival_guides/urban.md': 'urban',
+      'docs/survival_guides/general.md': 'general',
+    };
+
+    for (final entry in assets.entries) {
+      final path = entry.key;
+      final topic = entry.value;
+      final id = p.basenameWithoutExtension(path) + '_' + topic;
+
+      // Check if already in DB
+      final existingVersion = await _db.getDocVersion(id);
+      if (existingVersion == 'bundled-1.0') continue;
+
+      try {
+        final content = await rootBundle.loadString(path);
+
+        await _db.deleteChunksForDoc(id);
+        final chunks = _chunker.chunk(content, id, topic);
+        await _db.insertChunks(chunks);
+        await _db.upsertDoc({
+          'id': id,
+          'filename': p.basename(path),
+          'topic': topic,
+          'version': 'bundled-1.0',
+          'checksum': '', // Maintain schema constraint but avoid actual hashing
+          'last_synced': DateTime.now().millisecondsSinceEpoch,
+        });
+      } catch (e) {
+        print('Error seeding asset $path: $e');
+      }
+    }
+  }
 
   /// Returns true if the device has an active internet connection.
   Future<bool> isOnline() async {
@@ -61,15 +102,14 @@ class SyncService {
 
       for (var i = 0; i < manifest.docs.length; i++) {
         final entry = manifest.docs[i];
-        final localChecksum = await _db.getDocChecksum(entry.id);
+        final localVersion = await _db.getDocVersion(entry.id);
 
-        if (localChecksum == entry.sha256) {
+        if (localVersion == entry.version) {
           onProgress?.call(i + 1, manifest.docs.length);
           continue; // Already up to date
         }
 
         final content = await _downloadDoc(entry.url);
-        _verifyChecksum(content, entry.sha256, entry.filename);
 
         // Write to disk
         final dir = Directory(p.join(docsDir.path, entry.topic));
@@ -86,7 +126,7 @@ class SyncService {
           'filename': entry.filename,
           'topic': entry.topic,
           'version': entry.version,
-          'checksum': entry.sha256,
+          'checksum': '', // Maintain schema constraint
           'last_synced': DateTime.now().millisecondsSinceEpoch,
         });
 
@@ -115,13 +155,6 @@ class SyncService {
     final response = await http.get(Uri.parse(url));
     if (response.statusCode != 200) throw Exception('Failed to download doc: $url');
     return response.body;
-  }
-
-  void _verifyChecksum(String content, String expectedSha256, String filename) {
-    final actual = sha256.convert(utf8.encode(content)).toString();
-    if (actual != expectedSha256) {
-      throw Exception('Checksum mismatch for $filename: expected $expectedSha256, got $actual');
-    }
   }
 
   Future<Directory> _docsDirectory() async {

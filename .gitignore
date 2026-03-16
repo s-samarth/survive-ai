@@ -43,3 +43,14 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Release signing credentials — NEVER commit
+android/key.properties
+*.keystore
+*.jks
+
+# Model files (large, downloaded on-device)
+*.gguf
+
+# Agent temp files
+.tmp/

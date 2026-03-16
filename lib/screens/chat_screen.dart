@@ -2,26 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/chat_message.dart';
 import '../providers/providers.dart';
-import '../services/agent_orchestrator.dart';
 import '../utils/prompt_builder.dart';
 import '../widgets/message_bubble.dart';
-import 'situation_screen.dart';
-import 'step_guide_screen.dart';
 
 /// Main chat interface — RAG-augmented conversation with the on-device LLM.
 ///
-/// [topicFilter] — optional topic to scope RAG retrieval (e.g. from doc reader).
-/// [enableIntentClassification] — when true (default for main chat), classifies
-/// user intent and may redirect to SituationScreen or StepGuideScreen.
+/// [topicFilter] — optional topic to scope RAG retrieval (e.g. from guide reader).
 class ChatScreen extends ConsumerStatefulWidget {
   final String? topicFilter;
-  final bool enableIntentClassification;
 
-  const ChatScreen({
-    super.key,
-    this.topicFilter,
-    this.enableIntentClassification = true,
-  });
+  const ChatScreen({super.key, this.topicFilter});
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -54,71 +44,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
 
     try {
-      final llm = ref.read(llmServiceProvider);
       final rag = ref.read(ragServiceProvider);
+      final llm = ref.read(llmServiceProvider);
 
-      // Intent classification (only in main chat, not scoped chats)
-      if (widget.enableIntentClassification && widget.topicFilter == null) {
-        final intentPrompt = PromptBuilder.buildIntentPrompt(text);
-        final intentBuffer = StringBuffer();
-        await for (final token in llm.chat(prompt: intentPrompt)) {
-          intentBuffer.write(token);
-        }
-        final intent = parseIntent(intentBuffer.toString());
-
-        if (intent == AgentIntent.assess && mounted) {
-          setState(() {
-            _isGenerating = false;
-            _streamingBuffer = '';
-          });
-          Navigator.push(
-            context,
-            MaterialPageRoute(builder: (_) => const SituationScreen()),
-          );
-          return;
-        }
-
-        if (intent == AgentIntent.guide && mounted) {
-          // Generate step-by-step guide
-          setState(() => _streamingBuffer = 'Generating step-by-step guide…');
-          _scrollToBottom();
-
-          final chunks = await rag.retrieve(text, topicFilter: widget.topicFilter);
-          final prompt = PromptBuilder.buildChatPrompt(
-            chunks: chunks,
-            history: [],
-            userMessage: 'Give me step-by-step instructions for: $text. '
-                'Number each step. Keep each step to 1-2 sentences.',
-          );
-
-          final guideBuffer = StringBuffer();
-          await for (final token in llm.chat(prompt: prompt)) {
-            guideBuffer.write(token);
-          }
-
-          final steps = _parseGuideSteps(guideBuffer.toString());
-          if (steps.isNotEmpty && mounted) {
-            setState(() {
-              _isGenerating = false;
-              _streamingBuffer = '';
-            });
-            Navigator.push(
-              context,
-              MaterialPageRoute(
-                builder: (_) => StepGuideScreen(
-                  title: text,
-                  steps: steps,
-                  topic: widget.topicFilter,
-                ),
-              ),
-            );
-            return;
-          }
-          // If parsing failed, fall through to normal chat
-        }
-      }
-
-      // Normal CHAT flow: RAG retrieval + streaming response
       final chunks = await rag.retrieve(text, topicFilter: widget.topicFilter);
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: chunks,
@@ -156,28 +84,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
-  List<String> _parseGuideSteps(String response) {
-    final lines = response.split('\n');
-    final steps = <String>[];
-    final buffer = StringBuffer();
-
-    for (final line in lines) {
-      // Check if this line starts a new numbered step
-      if (RegExp(r'^\d+[\.\)]\s').hasMatch(line.trim()) && buffer.isNotEmpty) {
-        steps.add(buffer.toString().trim());
-        buffer.clear();
-      }
-      if (line.trim().isNotEmpty) {
-        if (buffer.isNotEmpty) buffer.write('\n');
-        buffer.write(line.replaceFirst(RegExp(r'^\d+[\.\)]\s*'), '').trim());
-      }
-    }
-    if (buffer.isNotEmpty) {
-      steps.add(buffer.toString().trim());
-    }
-    return steps.where((s) => s.isNotEmpty).toList();
-  }
-
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (_scrollController.hasClients) {
@@ -193,10 +99,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   Widget build(BuildContext context) {
     final llmReady = ref.watch(llmReadyProvider);
+    final llmError = ref.watch(llmErrorProvider);
 
     return Column(
       children: [
-        if (!llmReady)
+        if (!llmReady && llmError == null)
           Container(
             color: Colors.orange[100],
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -205,6 +112,25 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                 Icon(Icons.download, size: 16),
                 SizedBox(width: 8),
                 Text('AI model is loading…', style: TextStyle(fontSize: 13)),
+              ],
+            ),
+          ),
+        if (!llmReady && llmError != null)
+          Container(
+            color: Colors.red[100],
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: Row(
+              children: [
+                const Icon(Icons.error_outline, size: 16, color: Colors.red),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    llmError,
+                    style: const TextStyle(fontSize: 12, color: Colors.red),
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
               ],
             ),
           ),

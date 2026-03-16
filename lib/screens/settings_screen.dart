@@ -83,21 +83,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     }
   }
 
-  Future<void> _clearActionPlan() async {
-    final db = ref.read(databaseServiceProvider);
-    final plan = await db.getActivePlan();
-    if (plan != null) {
-      final database = await db.db;
-      await database.update('action_plans', {'is_active': 0},
-          where: 'id = ?', whereArgs: [plan.id]);
-    }
-    if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Action plan cleared')),
-      );
-    }
-  }
-
   Future<int> _fileSize(String path) async {
     final file = File(path);
     if (await file.exists()) return await file.length();
@@ -161,14 +146,6 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
-          const Divider(),
-          _SectionHeader(title: 'Data'),
-          ListTile(
-            leading: const Icon(Icons.delete_outline),
-            title: const Text('Clear action plan'),
-            subtitle: const Text('Remove the current survival plan'),
-            onTap: _clearActionPlan,
-          ),
           const Divider(),
           _SectionHeader(title: 'About'),
           const ListTile(

@@ -39,5 +39,8 @@ final syncServiceProvider = Provider<SyncService>((ref) {
 /// Whether the model has been loaded into memory and is ready for inference.
 final llmReadyProvider = StateProvider<bool>((ref) => false);
 
+/// Error message if the model failed to load.
+final llmErrorProvider = StateProvider<String?>((ref) => null);
+
 /// Loading progress during model download: 0.0–1.0. Null = not downloading.
 final modelDownloadProgressProvider = StateProvider<double?>((ref) => null);

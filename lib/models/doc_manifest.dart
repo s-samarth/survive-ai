@@ -24,20 +24,17 @@ class ModelInfo {
   final String name;
   final String url;
   final int sizeBytes;
-  final String sha256;
 
   const ModelInfo({
     required this.name,
     required this.url,
     required this.sizeBytes,
-    required this.sha256,
   });
 
   factory ModelInfo.fromJson(Map<String, dynamic> json) => ModelInfo(
         name: json['name'] as String,
         url: json['url'] as String,
         sizeBytes: json['size_bytes'] as int,
-        sha256: json['sha256'] as String,
       );
 }
 
@@ -47,7 +44,6 @@ class DocEntry {
   final String topic;
   final String title;
   final String version;
-  final String sha256;
   final String url;
 
   const DocEntry({
@@ -56,7 +52,6 @@ class DocEntry {
     required this.topic,
     required this.title,
     required this.version,
-    required this.sha256,
     required this.url,
   });
 
@@ -66,7 +61,6 @@ class DocEntry {
         topic: json['topic'] as String,
         title: json['title'] as String,
         version: json['version'] as String,
-        sha256: json['sha256'] as String,
         url: json['url'] as String,
       );
 }

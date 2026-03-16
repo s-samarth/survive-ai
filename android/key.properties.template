@@ -1,0 +1,8 @@
+# Release signing credentials
+# Copy this file to key.properties and fill in your values.
+# NEVER commit key.properties to version control.
+
+storePassword=YOUR_STORE_PASSWORD
+keyPassword=YOUR_KEY_PASSWORD
+keyAlias=survive-ai
+storeFile=release-keystore.jks

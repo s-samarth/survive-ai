@@ -9,12 +9,21 @@ import '../models/doc_chunk.dart';
 /// The system prompt is injected as a "system" turn at the start.
 /// Retrieved RAG chunks are embedded in the system prompt as [CONTEXT].
 class PromptBuilder {
-  static const _systemBase = '''You are Survive AI — an expert survival assistant.
-Your purpose is to help people in dangerous situations: conflict zones, disasters, wilderness emergencies.
-Answer concisely and practically. Prioritize life safety.
-Use ONLY the provided [CONTEXT] to answer. If the context is insufficient, say so clearly.
-Never make up information. When in doubt, recommend seeking professional help if available.
-Do not provide specific medication dosages. This information is for general survival guidance only.''';
+  static const _systemBase = '''You are Survive AI — an expert offline survival assistant for people in life-threatening emergencies.
+You are running entirely on-device with no internet access. All knowledge comes from bundled survival guides.
+
+Available survival guides:
+- War/Conflict: shelter under fire, evacuation, blast injuries, hostage situations
+- Medical: wound care, CPR, infection control, shock management
+- Jungle: navigation, water sourcing, shelters, wildlife threats
+- Desert: heat management, water finding, signalling, sandstorms
+- Urban Disaster: earthquake/fire evacuation, urban navigation, scavenging supplies
+- General Survival: fire-making, signalling, food, psychological resilience
+
+When [CONTEXT] is provided, answer using ONLY that context — do not invent facts.
+When [CONTEXT] is absent (e.g. a greeting), respond briefly and helpfully, and invite the user to ask a survival question.
+Never fabricate specific medical dosages or guaranteed survival procedures.
+Be concise. Prioritize life safety above all else.''';
 
   static const _startTurn = '<start_of_turn>';
   static const _endTurn = '<end_of_turn>\n';
@@ -51,49 +60,6 @@ Do not provide specific medication dosages. This information is for general surv
     buffer.write('$_startTurn model\n');
 
     return buffer.toString();
-  }
-
-  /// Build the single-call prompt for intent classification.
-  /// Expected reply: exactly one word — CHAT, ASSESS, or GUIDE.
-  static String buildIntentPrompt(String userMessage) {
-    return '''$_startTurn system
-Classify the user's intent. Reply with exactly one word:
-- CHAT: general question or conversation
-- ASSESS: user wants to assess their survival situation
-- GUIDE: user wants step-by-step instructions for a specific task
-$_endTurn$_startTurn user
-$userMessage$_endTurn$_startTurn model
-''';
-  }
-
-  /// Build the prompt for extracting structured situation JSON.
-  static String buildSituationExtractionPrompt(String rawDescription) {
-    return '''$_startTurn system
-Extract survival situation details from the description. Reply ONLY with valid JSON matching this schema:
-{"environment":"jungle|desert|urban|mountain|coastal|unknown","injuries":[],"resources":[],"companions":0,"primary_goal":"escape|shelter|medical|rescue_signal|other","urgency":"critical|high|medium|low"}
-$_endTurn$_startTurn user
-$rawDescription$_endTurn$_startTurn model
-''';
-  }
-
-  /// Build the prompt for generating a prioritized action plan.
-  static String buildActionPlanPrompt({
-    required String situationSummary,
-    required List<DocChunk> chunks,
-  }) {
-    final context = _buildContext(chunks);
-    return '''$_startTurn system
-You are a survival expert. Generate a numbered action plan based on the situation and reference material.
-Each step must be: immediately actionable, specific, ordered by priority (life safety first), max 2 sentences.
-Format each step as: N. [PRIORITY: CRITICAL|HIGH|MEDIUM] Title — Detail
-
-Reference material:
-$context
-$_endTurn$_startTurn user
-Situation: $situationSummary
-
-Generate a survival action plan.$_endTurn$_startTurn model
-''';
   }
 
   static String _buildContext(List<DocChunk> chunks) {

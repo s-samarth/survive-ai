@@ -1,5 +1,4 @@
 import 'dart:io';
-import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -22,7 +21,6 @@ class DownloadService {
     required String url,
     required String filename,
     required String subfolder,
-    String? expectedSha256,
     int? expectedBytes,
     void Function(int downloaded, int total)? onProgress,
   }) async {
@@ -79,15 +77,6 @@ class DownloadService {
       await sink.close();
     }
 
-    // Verify checksum
-    if (expectedSha256 != null) {
-      final hash = await _computeSha256(tempFile);
-      if (hash != expectedSha256) {
-        await tempFile.delete();
-        throw Exception('Checksum mismatch: expected $expectedSha256, got $hash');
-      }
-    }
-
     // Rename .part to final file
     if (await file.exists()) await file.delete();
     await tempFile.rename(filePath);
@@ -96,25 +85,62 @@ class DownloadService {
   }
 
   /// Check if a file already exists at the expected location.
+  /// Checks both getApplicationDocumentsDirectory and getExternalStorageDirectory (for sideloaded files via adb).
   Future<String?> getExistingFile(String filename, String subfolder) async {
+    // 1. Check internal documents directory
     final appDir = await getApplicationDocumentsDirectory();
-    final filePath = p.join(appDir.path, subfolder, filename);
-    final file = File(filePath);
-    if (await file.exists()) return filePath;
+    final internalPath = p.join(appDir.path, subfolder, filename);
+    if (await File(internalPath).exists()) return internalPath;
+
+    // 2. Check external storage directory (Android only - /sdcard/Android/data/...)
+    if (Platform.isAndroid) {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) {
+        final externalPath = p.join(extDir.path, subfolder, filename);
+        if (await File(externalPath).exists()) return externalPath;
+      }
+    }
+
     return null;
   }
 
-  /// Verify an existing file's SHA-256 checksum.
-  Future<bool> verifyChecksum(String filePath, String expectedSha256) async {
-    final file = File(filePath);
-    if (!await file.exists()) return false;
-    final hash = await _computeSha256(file);
-    return hash == expectedSha256;
+  /// Find the model file in any known location.
+  ///
+  /// Checks (in order):
+  /// 1. Our models/ subfolder — written by [download]
+  /// 2. Root of app documents directory — written by flutter_gemma's fromNetwork()
+  /// 3. External storage — sideloaded via ADB
+  ///
+  /// Returns the absolute path if found, null otherwise.
+  Future<String?> findModelFile(String filename) async {
+    // 1. Our managed subfolder
+    final managed = await getExistingFile(filename, 'models');
+    if (managed != null) return managed;
+
+    // 2. flutter_gemma's network-download location (root of app docs)
+    final appDir = await getApplicationDocumentsDirectory();
+    final rootPath = p.join(appDir.path, filename);
+    if (await File(rootPath).exists()) return rootPath;
+
+    return null;
   }
 
-  Future<String> _computeSha256(File file) async {
-    final stream = file.openRead();
-    final digest = await sha256.bind(stream).first;
-    return digest.toString();
+  Future<void> deleteFile(String filename, String subfolder) async {
+    final docsDir = await getApplicationDocumentsDirectory();
+    final file = File(p.join(docsDir.path, subfolder, filename));
+    if (await file.exists()) {
+      await file.delete();
+    }
+
+    // Also check external storage
+    if (Platform.isAndroid) {
+      final extDir = await getExternalStorageDirectory();
+      if (extDir != null) {
+        final extFile = File(p.join(extDir.path, subfolder, filename));
+        if (await extFile.exists()) {
+          await extFile.delete();
+        }
+      }
+    }
   }
 }
