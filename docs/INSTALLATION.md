@@ -98,7 +98,6 @@ Ensure the following are checked in `flutter doctor` output:
 **Android Setup:**
 - Android Studio (for SDK manager and emulator)
 - Android SDK with Build Tools 34+
-- NDK version 27+ (required by llama_cpp_dart for native compilation)
 - A physical device or emulator running Android 7.0+ (API 24+)
 
 ### Clone and Install
@@ -124,8 +123,8 @@ flutter run -d android
 
 **Note on the LLM model in development:** The model download requires a working manifest URL. To test LLM inference locally without waiting for the manifest:
 
-1. Download the GGUF model manually from HuggingFace
-2. Copy it to the device: `adb push gemma-3-1b-it-Q4_K_M.gguf /sdcard/Download/`
+1. Download the model file manually from the source
+2. Copy it to the device: `adb push gemma-2b-it-cpu-int4.bin /sdcard/Download/`
 3. Temporarily modify `DownloadService` to use a local path, or place the file directly in the app's files directory via `adb`
 
 ### Run in Release Mode
@@ -259,7 +258,7 @@ usb-stick/
 ├── SHA256.txt                 (checksum of the APK)
 ├── INSTALL.txt                (plain-text installation steps)
 └── model/                     (optional: pre-downloaded model file)
-    └── model.gguf
+    └── gemma-2b-it-cpu-int4.bin
 ```
 
 If the model file is included on the USB stick, users can avoid the WiFi download by copying it to the device's `Downloads/` folder before first launch. The app will detect it and skip the download step.
@@ -301,11 +300,11 @@ The maintainer's signing key fingerprint is published in `SECURITY.md`.
 
 ### The model won't load
 
-- Check that `model.gguf` is in `/data/user/0/com.surviveai.survive_ai/files/models/`
+- Check that `gemma-2b-it-cpu-int4.bin` is in the app's files directory
 - Verify the device has at least 1.5GB free RAM (close background apps)
-- Check `adb logcat` for native crash output from llama.cpp:
+- Check `adb logcat` for crash output:
   ```bash
-  adb logcat | grep -E "llama|survive_ai"
+  adb logcat | grep -E "survive_ai|flutter_gemma|mediapipe"
   ```
 
 ### The model download keeps failing
@@ -326,14 +325,10 @@ The maintainer's signing key fingerprint is published in `SECURITY.md`.
 - Avoid special characters in search queries — FTS5 MATCH treats them as operators
 - Check that the `chunks_fts` virtual table was created correctly (not just `chunks`)
 
-### flutter run fails with NDK errors
+### flutter run fails with build errors
 
-- Ensure NDK is installed: open Android Studio → SDK Manager → SDK Tools → NDK
-- Verify the version: `llama_cpp_dart` requires NDK 27+
-- Set the NDK path explicitly in `android/local.properties`:
-  ```
-  ndk.dir=/Users/<you>/Library/Android/sdk/ndk/27.x.x.xxxxxxx
-  ```
+- Ensure Android SDK Build Tools 34+ are installed: open Android Studio → SDK Manager → SDK Tools
+- Run `flutter clean && flutter pub get` and try again
 
 ### flutter analyze reports issues
 
@@ -360,7 +355,7 @@ The maintainer's signing key fingerprint is published in `SECURITY.md`.
 | Android version | 7.0 (API 24) | 10.0+ (API 29+) |
 | RAM | 3GB | 4GB+ |
 | Storage | 1GB free | 2GB+ free |
-| CPU | ARMv7 (armeabi-v7a) | ARM64 (arm64-v8a) |
+| CPU | ARM64 (arm64-v8a) | ARM64 (arm64-v8a) |
 | Internet | WiFi for first launch | Not required after setup |
 
-The app is compiled for both `arm64-v8a` (64-bit) and `armeabi-v7a` (32-bit) to cover the broadest range of Android devices in conflict regions.
+The app is compiled for `arm64-v8a` (64-bit ARM) only.

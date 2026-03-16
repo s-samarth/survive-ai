@@ -17,7 +17,6 @@ jobs:
 
       - uses: subosito/flutter-action@v2
         with:
-          flutter-version: '3.29.0'
           channel: 'stable'
           cache: true
 
@@ -39,7 +38,7 @@ jobs:
           KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
           STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
         run: |
-          cat > android/key.properties << EOF
+          cat > android/key.properties <<EOF
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
@@ -47,7 +46,7 @@ jobs:
           EOF
 
       - name: Build signed release APK
-        run: flutter build apk --release --target-platform android-arm,android-arm64
+        run: flutter build apk --release --target-platform android-arm64
 
       - name: Compute SHA-256 checksum
         run: |

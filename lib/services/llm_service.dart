@@ -37,7 +37,10 @@ class LlmService {
 
     _model = await FlutterGemma.getActiveModel(
       maxTokens: 512,
-      preferredBackend: PreferredBackend.gpu,
+      // CPU backend: on 4 GB Android devices, GPU uses shared memory.
+      // Gemma (~1.6 GB) on GPU + app heap routinely exhausts the 4 GB pool.
+      // CPU keeps the model in pageable RAM where Android can manage pressure.
+      preferredBackend: PreferredBackend.cpu,
     );
 
     _isLoaded = true;
@@ -57,7 +60,13 @@ class LlmService {
       throw StateError('Model not loaded. Call loadModel() first.');
     }
 
-    await _session?.close();
+    // Null the reference FIRST so the old session's memory can be released
+    // before the new session allocates. Without this, both sessions exist in
+    // memory simultaneously (race condition → OOM on the second+ turn).
+    final prev = _session;
+    _session = null;
+    await prev?.close();
+
     _session = await _model!.createSession(temperature: 0.7, topK: 40);
 
     await _session!.addQueryChunk(Message(text: prompt));

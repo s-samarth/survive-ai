@@ -15,7 +15,6 @@ Survive AI is a fully offline Android application. After a one-time WiFi setup, 
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │                        UI Layer (Flutter)                   │   │
 │  │  DisclaimerScreen  SetupScreen  HomeScreen  ChatScreen      │   │
-│  │  SituationScreen   ActionPlanScreen  StepGuideScreen        │   │
 │  │  TopicBrowserScreen  DocListScreen  DocReaderScreen         │   │
 │  │  SettingsScreen                                             │   │
 │  └──────────────────────────┬──────────────────────────────────┘   │
@@ -25,23 +24,23 @@ Survive AI is a fully offline Android application. After a one-time WiFi setup, 
 │  │                                                             │   │
 │  │  ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐   │   │
 │  │  │  LlmService  │  │  RagService │  │   SyncService    │   │   │
-│  │  │ (LlamaParent)│  │ BM25 + Vec  │  │  WiFi-gated      │   │   │
+│  │  │(flutter_gemma)│  │  BM25       │  │  WiFi-gated      │   │   │
 │  │  └──────┬───────┘  └──────┬──────┘  └────────┬─────────┘   │   │
 │  │         │                 │                   │             │   │
 │  │  ┌──────┴─────────────────┴───────────────────┴──────────┐ │   │
 │  │  │              DatabaseService (SQLite)                  │ │   │
-│  │  │  chunks | chunks_fts | docs | action_plans | steps    │ │   │
+│  │  │  chunks | chunks_fts | docs                           │ │   │
 │  │  └────────────────────────────────────────────────────────┘ │   │
 │  │                                                             │   │
-│  │  ┌──────────────────┐  ┌──────────────────┐  ┌──────────┐  │   │
-│  │  │  ChunkerService  │  │  SituationAssess │  │ Download │  │   │
-│  │  │  (Markdown→chunks│  │  AgentOrchestrat │  │ Service  │  │   │
-│  │  └──────────────────┘  └──────────────────┘  └──────────┘  │   │
+│  │  ┌──────────────────┐  ┌──────────────────┐                │   │
+│  │  │  ChunkerService  │  │  DownloadService │                │   │
+│  │  │  (Markdown→chunks│  │  (resumable HTTP)│                │   │
+│  │  └──────────────────┘  └──────────────────┘                │   │
 │  └─────────────────────────────────────────────────────────────┘   │
 │                                                                     │
 │  ┌─────────────────────────────────────────────────────────────┐   │
 │  │                     Storage Layer                           │   │
-│  │  /files/models/model.gguf              (~500MB)             │   │
+│  │  /files/models/gemma-2b-it-cpu-int4.bin (~500MB)             │   │
 │  │  /files/docs/{topic}/*.md              (~20MB)              │   │
 │  │  /files/survive_ai.db                  (~10MB)              │   │
 │  └─────────────────────────────────────────────────────────────┘   │
@@ -65,10 +64,11 @@ Survive AI is a fully offline Android application. After a one-time WiFi setup, 
 ### LlmService
 
 ```dart
-// Wraps LlamaParent (llama_cpp_dart) — runs model on background isolate
-Future<void> loadModel(String modelPath);          // One-time setup
-Stream<String> chat({required String prompt});      // Streaming inference
-Future<void> disposeAsync();
+// Wraps flutter_gemma to provide model loading and token-streaming chat.
+// Calls FlutterGemma.installModel + getActiveModel(maxTokens: 512, preferredBackend: cpu)
+Future<void> loadModel(String modelPath);          // Re-activate model each launch
+Stream<String> chat({required String prompt});      // Creates session, streams tokens, closes previous session
+Future<void> disposeAsync();                       // Closes session and model
 ```
 
 ### RagService
@@ -90,13 +90,8 @@ Future<List<DocChunk>> getChunksByIds(List<String> ids);
 
 // Doc registry
 Future<void> upsertDoc(Map<String, dynamic> docMap);
-Future<String?> getDocChecksum(String docId);
+Future<String?> getDocVersion(String docId);
 Future<List<Map<String, dynamic>>> getDocsByTopic(String topic);
-
-// Action plans
-Future<void> saveActionPlan(ActionPlan plan);
-Future<ActionPlan?> getActivePlan();
-Future<void> markStepCompleted(String stepId);
 ```
 
 ### SyncService
@@ -172,7 +167,7 @@ DatabaseService.searchFts(query, topicFilter='jungle', limit=20)
     │  SQL: SELECT chunk_id FROM chunks_fts
     │       WHERE chunks_fts MATCH 'water jungle find'
     │       AND topic = 'jungle'
-    │       ORDER BY rank
+    │       ORDER BY bm25(chunks_fts, 1.0, 2.0, 1.5)
     │       LIMIT 20
     │
     ▼
@@ -191,35 +186,41 @@ PromptBuilder.buildChatPrompt(chunks, history, userMessage)
 LlmService.chat(prompt) → Stream<String> tokens
 ```
 
-### Context Window Budget (Gemma 3 1B — 8192 token context)
+### Context Window Budget (Gemma 2B IT — 8192 token context)
 
 | Component | Estimated Tokens |
 |---|---|
-| System prompt + instructions | ~120 |
+| System prompt + instructions | ~1200 |
 | 4 retrieved chunks (300 tokens each) | ~1200 |
 | Chat history (last 6 turns) | ~900 |
 | User message | ~50 |
-| Total input | ~2270 |
-| Reserved for generation (nPredict=512) | 512 |
-| **Total used** | **~2782** |
-| Available headroom | **~5410** |
+| Total input | ~3350 |
+| Reserved for generation (maxTokens=512) | 512 |
+| **Total used** | **~3862** |
+| Available headroom | **~4330** |
 
 The context window is comfortable. No truncation needed under normal use.
 
 ---
 
-## Prompt Templates
+## Prompt Template
+
+There is a single prompt template (RAG-augmented chat) defined in `lib/utils/prompt_builder.dart`.
 
 ### RAG-Augmented Chat
 
+The system prompt (~800 words / ~1200 tokens) establishes Survive AI's identity, knowledge domains (war, medical, urban disasters, jungle, desert, general survival), response style, and constraints. Key directives:
+
+- Give the most critical action first, then supporting steps by urgency
+- Use [CONTEXT] chunks as primary source; supplement with general knowledge only if context is incomplete
+- Never tell users to "call emergency services" as a first response
+- Tone: direct, calm, clear — not institutional
+
 ```
 <start_of_turn>system
-You are Survive AI — an expert survival assistant.
-Your purpose is to help people in dangerous situations: conflict zones, disasters, wilderness emergencies.
-Answer concisely and practically. Prioritize life safety.
-Use ONLY the provided [CONTEXT] to answer. If the context is insufficient, say so clearly.
-Never make up information. When in doubt, recommend seeking professional help if available.
-Do not provide specific medication dosages. This information is for general survival guidance only.
+You are Survive AI — a calm, expert survival assistant built for people
+in genuine life-threatening emergencies. You run entirely offline...
+[...full system prompt — ~800 words of detailed instructions...]
 
 [CONTEXT]
 --- From: medical/wound_care > Applying Pressure ---
@@ -235,59 +236,7 @@ How do I treat a deep wound?
 <start_of_turn>model
 ```
 
-### Intent Classification (single word reply)
-
-```
-<start_of_turn>system
-Classify the user's intent. Reply with exactly one word:
-- CHAT: general question or conversation
-- ASSESS: user wants to assess their survival situation
-- GUIDE: user wants step-by-step instructions for a specific task
-<end_of_turn>
-<start_of_turn>user
-{user_message}
-<end_of_turn>
-<start_of_turn>model
-```
-
-Expected reply: `CHAT` | `ASSESS` | `GUIDE`
-
-### Situation JSON Extraction
-
-```
-<start_of_turn>system
-Extract survival situation details from the description.
-Reply ONLY with valid JSON matching this exact schema:
-{
-  "environment": "jungle|desert|urban|mountain|coastal|unknown",
-  "injuries": ["string", ...],
-  "resources": ["string", ...],
-  "companions": integer,
-  "primary_goal": "escape|shelter|medical|rescue_signal|other",
-  "urgency": "critical|high|medium|low"
-}
-<end_of_turn>
-<start_of_turn>user
-{raw_description_from_assessor}
-<end_of_turn>
-<start_of_turn>model
-```
-
-### Action Plan Generation
-
-```
-<start_of_turn>system
-You are a survival expert. Generate a numbered action plan based on the situation and reference material.
-Each step must be: immediately actionable, specific, ordered by priority (life safety first), max 2 sentences.
-Format: N. [PRIORITY: CRITICAL|HIGH|MEDIUM] Title — Detail
-Reference material: {retrieved_chunks}
-<end_of_turn>
-<start_of_turn>user
-Situation: {situation_json}
-Generate a survival action plan.
-<end_of_turn>
-<start_of_turn>model
-```
+When no RAG chunks are retrieved (e.g., docs not yet synced), the `[CONTEXT]` block is omitted entirely.
 
 ---
 
@@ -323,27 +272,6 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
   body,
   tokenize = 'porter ascii'
 );
-
--- Agentic: persistent action plans
-CREATE TABLE action_plans (
-  id TEXT PRIMARY KEY,           -- UUID v4
-  created_at INTEGER NOT NULL,   -- Unix ms timestamp
-  situation_json TEXT NOT NULL,  -- serialized Situation object
-  is_active INTEGER NOT NULL DEFAULT 1
-);
-
--- Agentic: steps within an action plan
-CREATE TABLE action_steps (
-  id TEXT PRIMARY KEY,           -- UUID v4
-  plan_id TEXT NOT NULL REFERENCES action_plans(id) ON DELETE CASCADE,
-  step_index INTEGER NOT NULL,
-  priority TEXT NOT NULL,        -- "critical" | "high" | "medium"
-  title TEXT NOT NULL,
-  detail TEXT NOT NULL,
-  source_doc_id TEXT,            -- nullable reference to docs.id
-  is_completed INTEGER NOT NULL DEFAULT 0,
-  completed_at INTEGER           -- Unix ms timestamp, nullable
-);
 ```
 
 ---
@@ -353,7 +281,7 @@ CREATE TABLE action_steps (
 ```
 /data/user/0/com.surviveai.survive_ai/files/
 ├── models/
-│   └── model.gguf                          (~500MB, downloaded on first launch)
+│   └── gemma-2b-it-cpu-int4.bin            (~500MB, downloaded on first launch)
 ├── docs/
 │   ├── manifest.json                       (last fetched manifest)
 │   ├── war/
@@ -380,47 +308,16 @@ App opens
 SharedPreferences: disclaimer_accepted?
     │                       │
     ▼ (no)                  ▼ (yes)
-DisclaimerScreen        DownloadService.getExistingFile('model.gguf')
+DisclaimerScreen        HomeScreen (always)
+    │                       │
+    │ (accept)              ▼
+    │                   DownloadService.findModelFile('gemma-2b-it-cpu-int4.bin')
     │                       │                    │
-    │ (accept)              ▼ (missing)          ▼ (present)
-    │                   SetupScreen          HomeScreen
-    │                       │                    │
-    └───────────────────────┘            LlmService.loadModel()
-                                         (background, non-blocking)
-```
-
----
-
-## Agentic Orchestration State Machine
-
-```
-         ┌─────────┐
-         │  IDLE   │ ◄──────────────────────────┐
-         └────┬────┘                            │
-              │ User sends message              │
-              ▼                                 │
-     ┌─────────────────┐                        │
-     │ INTENT_CLASSIFY │                        │
-     │ (single LLM call│                        │
-     │  → CHAT|ASSESS  │                        │
-     │    |GUIDE)       │                        │
-     └────────┬────────┘                        │
-              │                                 │
-    ┌─────────┴──────────┐                      │
-    ▼         ▼          ▼                      │
-  CHAT      ASSESS     GUIDE                    │
-    │         │          │                      │
-    │    5 Q&A flow  Step planner               │
-    │    (hardcoded)  (RAG + LLM)               │
-    │         │          │                      │
-    │    SITUATION_  STEP_GUIDE                 │
-    │    SUMMARY     DISPLAY                    │
-    │         │          │                      │
-    │    ACTION_PLAN      │                     │
-    │    GENERATION       │                     │
-    │         │          │                      │
-    └─────────┴──────────┴──────────────────────┘
-                                 (user returns to home)
+    │                       ▼ (missing)          ▼ (present)
+    │                   HomeScreen shows     LlmService.loadModel()
+    │                   download banner      (background, non-blocking)
+    │                       │
+    └───────────────────────┘
 ```
 
 ---
@@ -452,7 +349,7 @@ All network calls are read-only HTTP GETs to GitHub raw URLs. No auth, no POST, 
 ## Security & Privacy
 
 - **No PII collected.** The app has no analytics, no crash reporting, no telemetry.
-- **All data is local.** Chat history, action plans, and survival docs exist only on the device.
+- **All data is local.** Chat history and survival docs exist only on the device.
 - **Network calls are read-only** to public GitHub repos. No credentials, no auth tokens.
 - **Checksums on every download.** SHA-256 verified before any file is written to disk.
 - **APK distribution.** Users get the APK from GitHub Releases. The maintainer's signing key fingerprint is published in SECURITY.md so users can verify APK authenticity.
@@ -460,9 +357,9 @@ All network calls are read-only HTTP GETs to GitHub raw URLs. No auth, no POST, 
 
 ---
 
-## Phase 2: Semantic Search (Vector RAG)
+## Phase 2: Semantic Search (Vector RAG) — Planned / Future
 
-Phase 2 adds dense vector retrieval alongside BM25.
+Phase 2 will add dense vector retrieval alongside BM25. This is not yet implemented.
 
 **Additional components:**
 - `all-MiniLM-L6-v2.onnx` (~22MB) — embedding model, run via `onnxruntime_flutter`

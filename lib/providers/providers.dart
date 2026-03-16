@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/database_service.dart';
+import '../services/embedding_service.dart';
 import '../services/llm_service.dart';
 import '../services/chunker_service.dart';
 import '../services/rag_service.dart';
@@ -23,15 +24,22 @@ final chunkerServiceProvider = Provider<ChunkerService>((ref) {
   return const ChunkerService();
 });
 
+/// Stateless service — no persistent resources, no dispose needed.
+final embeddingServiceProvider = Provider<EmbeddingService>((ref) {
+  return EmbeddingService();
+});
+
 final ragServiceProvider = Provider<RagService>((ref) {
   final db = ref.watch(databaseServiceProvider);
-  return RagService(db);
+  final embedder = ref.watch(embeddingServiceProvider);
+  return RagService(db, embedder);
 });
 
 final syncServiceProvider = Provider<SyncService>((ref) {
   final db = ref.watch(databaseServiceProvider);
   final chunker = ref.watch(chunkerServiceProvider);
-  return SyncService(db, chunker);
+  final embedder = ref.watch(embeddingServiceProvider);
+  return SyncService(db, chunker, embedder);
 });
 
 // ── LLM state ────────────────────────────────────────────────────────────────

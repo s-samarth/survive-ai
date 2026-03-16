@@ -8,22 +8,32 @@ This document outlines what comes after the MVP (Phases 0–4). Items are groupe
 
 The current implementation is a fully working offline Android app:
 
-- Flutter Android app with on-device Gemma 3 1B (Q4_K_M, ~500MB)
+- Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~500MB) via flutter_gemma (MediaPipe LLM Inference)
 - First-launch flow: disclaimer, WiFi check, resumable model download, SHA-256 verification, doc sync
 - RAG over community survival docs — BM25 keyword search via SQLite FTS5
-- Intent classification: each message routed to CHAT, ASSESS, or GUIDE flow
-- Situation assessment: 5 guided questions, LLM extraction of structured JSON, RAG-augmented action plan generation
-- Persistent action plans stored in SQLite — survive app kill and reopen
-- Step-by-step guidance screen for task-specific instruction
+- Offline chat: user message → BM25 retrieval → prompt built → LLM streams response
 - Topic browser: 6 categories (War, Medical, Jungle, Desert, Urban, General) with Markdown doc reader
 - WiFi-gated doc sync: download only changed docs, verify checksums, re-index
 - Sync status banner: notifies user when new docs are available
-- Settings screen: storage info, manual sync, clear action plan
+- Settings screen: storage info, manual sync
 - Direct APK distribution — no app store required
 
 ---
 
 ## Near-Term (Post-MVP)
+
+### Intent Classification & Agentic Routing
+**Why it matters:** Currently, all user messages go through the chat flow. Adding intent classification (CHAT, ASSESS, GUIDE) would allow the app to automatically route messages to the right experience.
+
+**What this enables:**
+- Intent classification: each message routed to CHAT, ASSESS, or GUIDE flow
+- Situation assessment: 5 guided questions, LLM extraction of structured JSON, RAG-augmented action plan generation
+- Persistent action plans stored in SQLite — survive app kill and reopen
+- Step-by-step guidance screen for task-specific instruction
+
+**Effort:** Medium — the data model and prompt templates need to be designed and validated.
+
+---
 
 ### Multi-Language Support
 **Why it matters:** The highest-risk populations are in Arabic, Farsi, and Ukrainian-speaking regions. English-only is a barrier.
@@ -109,7 +119,7 @@ The current implementation is a fully working offline Android app:
 
 **Approach:**
 - Flutter makes this relatively straightforward — most code is shared
-- `llama_cpp_dart` supports iOS (builds the .dylib via Xcode)
+- `flutter_gemma` supports iOS via MediaPipe LLM Inference
 - Model download requires iOS file management (different path conventions)
 - App Store distribution vs. TestFlight for NGO pilots
 
@@ -182,7 +192,7 @@ To keep the project focused and the app trustworthy:
 
 ## Open Questions
 
-1. **What SLM is right for low-end devices?** Gemma 3 1B is the current choice, but as quantization improves and better small models emerge, we should re-evaluate. The manifest.json model URL allows this upgrade without a new app release.
+1. **What SLM is right for low-end devices?** Gemma 2B IT is the current choice, but as quantization improves and better small models emerge, we should re-evaluate. The manifest.json model URL allows this upgrade without a new app release.
 
 2. **How do we validate medical content?** The biggest risk to user trust is incorrect medical guidance. We need a Medical Advisory Board before the medical docs go beyond basic first aid.
 

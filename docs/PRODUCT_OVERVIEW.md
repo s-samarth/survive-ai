@@ -31,7 +31,7 @@ Three things have converged to make this possible in 2026:
 
 2. **Smartphone penetration in conflict regions is high.** Even in war-torn areas, 60–80% of people carry Android smartphones — the hardware for Survive AI is already in their hands.
 
-3. **On-device AI is finally small enough.** Models like Gemma 3 1B run on a mid-range Android phone with 3GB RAM. A 500MB download is all that's needed. This wasn't possible even 12 months ago.
+3. **On-device AI is finally small enough.** Models like Gemma 2B IT run on a mid-range Android phone with 3GB RAM. A 500MB download is all that's needed. This wasn't possible even 12 months ago.
 
 ---
 
@@ -41,8 +41,8 @@ Three things have converged to make this possible in 2026:
 |---|---|---|---|
 | Works with zero internet | Always | Static content only | Requires internet |
 | AI-powered answers | On-device LLM | Static text only | Cloud LLM |
-| Situation assessment | Guided interview + AI plan | Not available | Not available |
-| Step-by-step action plan | Generated + persistent | Not available | Session only |
+| Situation assessment | Coming soon | Not available | Not available |
+| Step-by-step action plan | Coming soon | Not available | Session only |
 | Community survival docs | Open-source, reviewed | Not available | N/A |
 | Cost to user | Free | Varies | Subscription |
 | No account required | Yes | Yes | No |
@@ -101,9 +101,8 @@ Docs are open-source, community-contributed, and reviewed by subject matter expe
 
 ## Technology (Non-Technical Summary)
 
-- **The AI brain:** Gemma 3 1B — a state-of-the-art small language model from Google, running entirely on-device via llama.cpp
+- **The AI brain:** Gemma 2B IT — a small language model from Google, running entirely on-device via flutter_gemma (MediaPipe LLM Inference)
 - **The knowledge base:** Expert survival guides stored locally and retrieved automatically based on what you ask (BM25 full-text search)
-- **The agentic layer:** Intent classification routes each message to the right flow — chat, situation assessment, or step-by-step guidance
 - **The app:** Built with Flutter for Android. Distributed as a direct APK — no app store required.
 - **Cost to build and run:** $0 — entirely open-source
 

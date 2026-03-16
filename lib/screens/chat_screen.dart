@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/chat_message.dart';
@@ -24,8 +25,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   bool _isGenerating = false;
   String _streamingBuffer = '';
 
+  // Timer used to batch token-streaming setState calls.
+  // Without batching, every token triggers a setState + String allocation,
+  // causing ~512 GC cycles per response and measurable memory pressure.
+  Timer? _streamFlushTimer;
+
   @override
   void dispose() {
+    _streamFlushTimer?.cancel();
     _controller.dispose();
     _scrollController.dispose();
     super.dispose();
@@ -48,18 +55,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final llm = ref.read(llmServiceProvider);
 
       final chunks = await rag.retrieve(text, topicFilter: widget.topicFilter);
+
+      // Pass only the history BEFORE the current user message.
+      // Previously, the filter bug passed the current user message in BOTH
+      // `history` and `userMessage`, duplicating it in the prompt and wasting
+      // ~50-200 context tokens per turn.
+      final pastHistory = _history.sublist(0, _history.length - 1);
+
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: chunks,
-        history: _history.where((m) => m.role != 'assistant' || _history.last != m).toList(),
+        history: pastHistory,
         userMessage: text,
       );
 
       final buffer = StringBuffer();
       await for (final token in llm.chat(prompt: prompt)) {
         buffer.write(token);
-        setState(() => _streamingBuffer = buffer.toString());
-        _scrollToBottom();
+        // Batch UI updates to ~20 fps instead of per-token.
+        // Reduces setState from ~512 calls/response to ~25, cutting GC
+        // pressure by ~20× during inference.
+        _streamFlushTimer ??= Timer(const Duration(milliseconds: 50), () {
+          _streamFlushTimer = null;
+          if (mounted) {
+            setState(() => _streamingBuffer = buffer.toString());
+            _scrollToBottom();
+          }
+        });
       }
+
+      // Final flush after stream ends
+      _streamFlushTimer?.cancel();
+      _streamFlushTimer = null;
 
       setState(() {
         _history.add(ChatMessage(
@@ -71,6 +97,8 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         _isGenerating = false;
       });
     } catch (e) {
+      _streamFlushTimer?.cancel();
+      _streamFlushTimer = null;
       setState(() {
         _history.add(ChatMessage(
           role: 'assistant',

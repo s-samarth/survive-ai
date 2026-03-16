@@ -1,3 +1,4 @@
+import 'dart:typed_data';
 import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
@@ -104,7 +105,12 @@ class DatabaseService {
     await batch.commit(noResult: true);
   }
 
-  /// BM25 keyword search via FTS5.
+  /// BM25 keyword search via FTS5 with field-weighted ranking.
+  ///
+  /// Weights: topic=1.0, heading_path=2.0, body=1.5 — heading matches score
+  /// higher than body matches, promoting sections whose title directly answers
+  /// the query.
+  ///
   /// Returns chunk IDs ranked by relevance (best first).
   Future<List<String>> searchFts(String query, {String? topicFilter, int limit = 20}) async {
     // FTS5 MATCH parses the query as a boolean expression — punctuation like
@@ -123,12 +129,57 @@ class DatabaseService {
       SELECT chunk_id FROM chunks_fts
       WHERE chunks_fts MATCH ?
       $topicClause
-      ORDER BY rank
+      ORDER BY bm25(chunks_fts, 1.0, 2.0, 1.5)
       LIMIT ?
       ''',
       args,
     );
     return rows.map((r) => r['chunk_id'] as String).toList();
+  }
+
+  // ── Dense retrieval (vector embeddings) ─────────────────────────────────────
+
+  /// Store a precomputed embedding for a single chunk.
+  ///
+  /// Embeddings are stored as raw IEEE-754 float32 bytes (512 floats = 2,048
+  /// bytes per chunk). For 300 chunks: ~614 KB total — negligible overhead.
+  Future<void> updateChunkEmbedding(String chunkId, Float32List embedding) async {
+    final database = await db;
+    final bytes = embedding.buffer.asUint8List(
+      embedding.offsetInBytes,
+      embedding.lengthInBytes,
+    );
+    await database.update(
+      'chunks',
+      {'embedding': bytes},
+      where: 'id = ?',
+      whereArgs: [chunkId],
+    );
+  }
+
+  /// Fetch all (chunkId, embedding) pairs where embeddings have been computed.
+  ///
+  /// Used by [RagService] to run brute-force cosine similarity at query time.
+  /// The corpus is small (~300 chunks max) so loading all into Dart memory is
+  /// efficient — the full payload is ≤614 KB.
+  Future<List<(String, Float32List)>> getAllEmbeddings({
+    String? topicFilter,
+  }) async {
+    final database = await db;
+    final whereClause = topicFilter != null
+        ? 'embedding IS NOT NULL AND topic = ?'
+        : 'embedding IS NOT NULL';
+    final rows = await database.rawQuery(
+      'SELECT id, embedding FROM chunks WHERE $whereClause',
+      topicFilter != null ? [topicFilter] : [],
+    );
+    return rows.map((r) {
+      final blob = r['embedding'] as Uint8List;
+      final f32 = Float32List.sublistView(
+        ByteData.sublistView(blob),
+      );
+      return (r['id'] as String, f32);
+    }).toList();
   }
 
   Future<List<DocChunk>> getChunksByIds(List<String> ids) async {

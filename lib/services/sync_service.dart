@@ -5,10 +5,13 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/doc_manifest.dart';
+import '../models/doc_chunk.dart';
 import 'database_service.dart';
 import 'chunker_service.dart';
+import 'embedding_service.dart';
 
 // Replace with your actual GitHub raw manifest URL once the docs repo is created.
 const _manifestUrl =
@@ -22,11 +25,13 @@ const _manifestUrl =
 /// 3. For each doc in manifest, compare SHA-256 with local DB checksum.
 /// 4. Download only changed or new docs.
 /// 5. Verify checksum, write to disk, ingest into SQLite.
+/// 6. Compute TFLite embeddings for new chunks and store in DB.
 class SyncService {
   final DatabaseService _db;
   final ChunkerService _chunker;
+  final EmbeddingService _embedder;
 
-  SyncService(this._db, this._chunker);
+  SyncService(this._db, this._chunker, this._embedder);
 
   /// Seeds the database with bundled assets if they haven't been loaded yet.
   /// Ensures the app has expert knowledge immediately after install (Zero-Wait RAG).
@@ -43,7 +48,7 @@ class SyncService {
     for (final entry in assets.entries) {
       final path = entry.key;
       final topic = entry.value;
-      final id = p.basenameWithoutExtension(path) + '_' + topic;
+      final id = '${p.basenameWithoutExtension(path)}_$topic';
 
       // Check if already in DB
       final existingVersion = await _db.getDocVersion(id);
@@ -63,8 +68,13 @@ class SyncService {
           'checksum': '', // Maintain schema constraint but avoid actual hashing
           'last_synced': DateTime.now().millisecondsSinceEpoch,
         });
+
+        // Compute semantic embeddings for the newly inserted chunks.
+        // EmbeddingService loads and disposes TFLite within this call — safe
+        // to run before Gemma is loaded.
+        await _embedChunks(chunks);
       } catch (e) {
-        print('Error seeding asset $path: $e');
+        debugPrint('Error seeding asset $path: $e');
       }
     }
   }
@@ -89,7 +99,7 @@ class SyncService {
     }
   }
 
-  /// Full sync: fetch manifest, download changed docs, re-index.
+  /// Full sync: fetch manifest, download changed docs, re-index, re-embed.
   ///
   /// [onProgress] — called with (downloaded, total) doc counts.
   Future<SyncResult> syncNow({void Function(int done, int total)? onProgress}) async {
@@ -130,6 +140,9 @@ class SyncService {
           'last_synced': DateTime.now().millisecondsSinceEpoch,
         });
 
+        // Compute embeddings for synced chunks
+        await _embedChunks(chunks);
+
         updated++;
         onProgress?.call(i + 1, manifest.docs.length);
       }
@@ -142,6 +155,34 @@ class SyncService {
       return SyncResult(status: SyncStatus.upToDate, updatedDocs: updated);
     } catch (e) {
       return SyncResult(status: SyncStatus.error, updatedDocs: 0, error: e.toString());
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Private helpers
+  // ---------------------------------------------------------------------------
+
+  /// Compute and store embeddings for a list of chunks.
+  ///
+  /// Uses [EmbeddingService.embedBatch] which loads TFLite, runs all chunks,
+  /// then immediately disposes the interpreter. This keeps peak memory usage
+  /// bounded and ensures the TFLite runtime is released before Gemma loads.
+  ///
+  /// If the embedding model is not available (asset missing), this is a no-op
+  /// and chunks remain with NULL embeddings — retrieval falls back to BM25.
+  Future<void> _embedChunks(List<DocChunk> chunks) async {
+    if (chunks.isEmpty) return;
+
+    // Prepend heading to chunk body for richer semantic context
+    final texts = chunks.map((c) {
+      return c.headingPath.isNotEmpty ? '${c.headingPath}: ${c.body}' : c.body;
+    }).toList();
+
+    final embeddings = await _embedder.embedBatch(texts);
+    if (embeddings.isEmpty) return; // Model not available — skip silently
+
+    for (var i = 0; i < chunks.length && i < embeddings.length; i++) {
+      await _db.updateChunkEmbedding(chunks[i].id, embeddings[i]);
     }
   }
 

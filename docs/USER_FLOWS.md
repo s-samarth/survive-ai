@@ -33,7 +33,7 @@ The only moment in the app's lifecycle that requires internet.
 │  from GitHub                "Connect to WiFi to download            │
 │      │                       the AI model (~500MB)"                 │
 │      ▼                              │                                │
-│  Download model.gguf           [Retry] button                        │
+│  Download gemma-2b-it-cpu-int4.bin           [Retry] button                        │
 │  (progress bar, resumable)          │ (user connects)               │
 │      │                             └──► (back to connectivity check)│
 │      ▼                                                               │
@@ -44,7 +44,7 @@ The only moment in the app's lifecycle that requires internet.
 │  Index docs into local SQLite                                        │
 │      │                                                               │
 │      ▼                                                               │
-│  Load Gemma 3 1B model                                               │
+│  Load Gemma 2B IT model via flutter_gemma                                               │
 │      │                                                               │
 │      ▼                                                               │
 │  HOME SCREEN  ← User is now fully offline capable                   │
@@ -72,7 +72,7 @@ The only moment in the app's lifecycle that requires internet.
 │      ▼                                                               │
 │  _EntryRouter                                                        │
 │  disclaimer_accepted == true                                         │
-│  model.gguf exists                                                   │
+│  gemma-2b-it-cpu-int4.bin exists                                                   │
 │      │                                                               │
 │      ▼                                                               │
 │  HomeScreen (immediate)                                              │
@@ -107,11 +107,7 @@ The everyday interaction: ask the AI a survival question.
 │  User types: "How do I treat a deep wound?"                         │
 │      │                                                               │
 │      ▼                                                               │
-│  Intent Classification (LLM, ~200ms)                                │
-│  → Result: CHAT                                                      │
-│      │                                                               │
-│      ▼                                                               │
-│  RAG Retrieval (SQLite FTS5, <100ms)                                │
+│  RAG Retrieval (SQLite FTS5 BM25, <100ms)                           │
 │  Retrieved: top-4 chunks from medical/ docs                         │
 │      │                                                               │
 │      ▼                                                               │
@@ -119,7 +115,7 @@ The everyday interaction: ask the AI a survival question.
 │  → System prompt + retrieved context + history + user message       │
 │      │                                                               │
 │      ▼                                                               │
-│  LLM Inference (Gemma 3 1B, background isolate)                     │
+│  LLM Inference (Gemma 2B IT via flutter_gemma)                      │
 │  → Tokens stream in real-time to the chat bubble                    │
 │  → BlinkingCursor shown during generation                           │
 │      │                                                               │
@@ -133,11 +129,12 @@ The everyday interaction: ask the AI a survival question.
 **Key behavior:**
 - If model is still loading, input is disabled with "Loading AI…" hint
 - Chat history kept in memory (last 6 turns in context window)
-- Intent classification runs on every message and may redirect to ASSESS or GUIDE flows
 
 ---
 
 ## Flow 4: Situation Assessment (Agentic Flow)
+
+> **Planned — not yet implemented.** The flow below describes the intended design.
 
 The most powerful flow — for when the user is in active danger and needs a plan.
 
@@ -303,6 +300,8 @@ Silent update of survival docs when the user has internet access.
 
 ## Flow 7: Step-by-Step Guidance (GUIDE intent)
 
+> **Planned — not yet implemented.** The flow below describes the intended design.
+
 When a user asks how to do a specific task (triggered by intent classification).
 
 ```
@@ -376,4 +375,3 @@ SettingsScreen
 | LLM returns empty response | "Error: …" shown in chat bubble |
 | Corrupted model file | SHA-256 mismatch detected; download discarded; user retries |
 | No docs in topic | "No docs available yet. Sync over WiFi to download survival guides." |
-| Intent classification fails | Falls through to CHAT flow — always a safe default |

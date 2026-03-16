@@ -38,7 +38,7 @@ flutter run -d <device-id>
 flutter run --release -d <device-id>
 ```
 
-**Note on the LLM model:** In development, the model won't download automatically unless you have a working manifest URL. To test LLM features locally, manually copy a GGUF model file to the device's `/sdcard/Download/` folder and modify `DownloadService.getExistingFile()` to locate it temporarily.
+**Note on the LLM model:** In development, the model won't download automatically unless you have a working manifest URL. To test LLM features locally, manually copy `gemma-2b-it-cpu-int4.bin` to the device's `/sdcard/Download/` folder and modify `DownloadService.getExistingFile()` to locate it temporarily.
 
 ---
 
@@ -63,19 +63,16 @@ android/           Android-specific build config.
 | File | Purpose |
 |---|---|
 | `lib/main.dart` | App entry + `_EntryRouter` (first-launch routing logic) |
-| `lib/models/action_plan.dart` | `ActionPlan`, `ActionStep`, `StepPriority` enum |
 | `lib/models/chat_message.dart` | `ChatMessage` — role, content, timestamp |
 | `lib/models/doc_chunk.dart` | `DocChunk` + `DocTopic` enum (6 categories) |
 | `lib/models/doc_manifest.dart` | `DocManifest`, `ModelInfo`, `DocEntry` — manifest.json schema |
-| `lib/models/situation.dart` | `Situation` — extracted from assessment; has `relevantTopics` getter |
-| `lib/services/llm_service.dart` | Wraps `LlamaParent` — `loadModel()`, `chat()` stream |
-| `lib/services/database_service.dart` | Owns SQLite schema; all chunk/doc/plan CRUD |
+| `lib/services/llm_service.dart` | Wraps `flutter_gemma` (MediaPipe LLM Inference) — `loadModel()`, `chat()` stream |
+| `lib/services/database_service.dart` | Owns SQLite schema; all chunk/doc CRUD |
 | `lib/services/chunker_service.dart` | Markdown to 300-token chunks with 50-token overlap |
-| `lib/services/rag_service.dart` | `retrieve()` and `retrieveForSituation()` via BM25 |
+| `lib/services/rag_service.dart` | Hybrid BM25+dense retrieval with RRF merge (dense disabled — stub embeddings) |
+| `lib/services/embedding_service.dart` | Stub embedding service (returns empty, BM25 fallback) |
 | `lib/services/sync_service.dart` | WiFi-gated GitHub sync with SHA-256 verification |
 | `lib/services/download_service.dart` | Resumable HTTP downloads with SHA-256 verification |
-| `lib/services/situation_assessor.dart` | 5 hardcoded assessment questions + `buildRawDescription()` |
-| `lib/services/agent_orchestrator.dart` | `AgentIntent` enum + `parseIntent()` function |
 | `lib/providers/providers.dart` | All Riverpod providers + `llmReadyProvider` |
 | `lib/screens/disclaimer_screen.dart` | First-launch safety acknowledgement |
 | `lib/screens/setup_screen.dart` | Setup flow: WiFi check, manifest fetch, download, sync, load |
@@ -84,11 +81,8 @@ android/           Android-specific build config.
 | `lib/screens/topic_browser_screen.dart` | 2x3 grid of topic cards |
 | `lib/screens/doc_list_screen.dart` | List of docs within a topic |
 | `lib/screens/doc_reader_screen.dart` | Full Markdown renderer + "Ask AI" button |
-| `lib/screens/situation_screen.dart` | 5-question interview, LLM extraction, plan generation |
-| `lib/screens/action_plan_screen.dart` | Persistent checklist with priority badges |
-| `lib/screens/step_guide_screen.dart` | Step-by-step guidance (GUIDE intent) |
-| `lib/screens/settings_screen.dart` | Storage info, sync controls, clear plan |
-| `lib/utils/prompt_builder.dart` | All 4 Gemma 3 prompt templates |
+| `lib/screens/settings_screen.dart` | Storage info, sync controls |
+| `lib/utils/prompt_builder.dart` | Chat prompt template |
 | `lib/widgets/message_bubble.dart` | Chat bubble with `BlinkingCursor` animation |
 | `lib/widgets/sync_status_banner.dart` | Auto-check banner for available doc updates |
 
@@ -310,15 +304,15 @@ If you want to add a topic beyond the current 6 (war, medical, jungle, desert, u
 
 The model download URL is controlled by `manifest.json` in the docs repo — not hardcoded in the app. To upgrade:
 
-1. Download the new GGUF model from HuggingFace
-2. Compute its SHA-256: `shasum -a 256 model.gguf`
+1. Download the new model binary (.bin) compatible with flutter_gemma (MediaPipe LLM Inference)
+2. Compute its SHA-256: `shasum -a 256 gemma-2b-it-cpu-int4.bin`
 3. Upload to a reliable public host (HuggingFace Hub recommended)
 4. Update the `model` section in `manifest.json`:
    ```json
    {
      "model": {
-       "name": "gemma-3-2b-it-Q4_K_M.gguf",
-       "url": "https://huggingface.co/.../resolve/main/gemma-3-2b-it-Q4_K_M.gguf",
+       "name": "gemma-2b-it-cpu-int4.bin",
+       "url": "https://huggingface.co/.../resolve/main/gemma-2b-it-cpu-int4.bin",
        "size_bytes": 1073741824,
        "sha256": "abc123..."
      }
@@ -326,7 +320,7 @@ The model download URL is controlled by `manifest.json` in the docs repo — not
    ```
 5. Users will be prompted to download the new model on their next WiFi sync
 
-**Important:** Old model files are NOT automatically deleted. The new model is stored as `model.gguf` (fixed filename), overwriting the old one after SHA-256 verification.
+**Important:** Old model files are NOT automatically deleted. The new model is stored as `gemma-2b-it-cpu-int4.bin` (fixed filename), overwriting the old one after SHA-256 verification.
 
 ---
 
@@ -336,7 +330,7 @@ The model download URL is controlled by `manifest.json` in the docs repo — not
 
 ```bash
 # Build release APK (signed with debug key during development)
-flutter build apk --release
+flutter build apk --release --target-platform android-arm64
 
 # Output: build/app/outputs/flutter-apk/app-release.apk
 ```
@@ -391,9 +385,9 @@ steps:
 ## Common Development Pitfalls
 
 **The model won't load on device:**
-- Check that `model.gguf` is in `/data/user/0/com.surviveai.survive_ai/files/models/`
+- Check that `gemma-2b-it-cpu-int4.bin` is in `/data/user/0/com.surviveai.survive_ai/files/models/`
 - Verify the device has at least 1.5GB free RAM
-- Check `adb logcat` for native crash output from llama.cpp
+- Check `adb logcat | grep "survive_ai\|flutter_gemma\|mediapipe"` for crash output
 
 **FTS5 search returns no results:**
 - Check that chunks were inserted into `chunks_fts` (not just `chunks`)
@@ -411,15 +405,6 @@ steps:
 - Verify the SHA-256 in manifest.json was computed from the exact file bytes (UTF-8 encoded)
 - Make sure there are no trailing newline differences between platforms
 - Use `shasum -a 256` on macOS, `sha256sum` on Linux — both produce the same output for the same bytes
-
-**Intent classification routes incorrectly:**
-- `parseIntent()` in `agent_orchestrator.dart` searches for the keyword anywhere in the response — it is intentionally lenient
-- If intent is consistently wrong, adjust `PromptBuilder.buildIntentPrompt()`
-
-**Action plan steps are not parsed:**
-- The step parser expects: `N. [PRIORITY: CRITICAL|HIGH|MEDIUM] Title — Detail`
-- If the LLM doesn't follow this format, a fallback parser splits numbered lines generically
-- Adjust `PromptBuilder.buildActionPlanPrompt()` if the model consistently produces a different format
 
 ---
 
