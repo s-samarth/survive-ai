@@ -5,21 +5,18 @@ import 'package:survive_ai/utils/prompt_builder.dart';
 
 void main() {
   group('PromptBuilder.buildChatPrompt', () {
-    test('includes Gemma 3 format markers', () {
+    test('does not include turn markers (flutter_gemma adds them)', () {
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],
         history: [],
         userMessage: 'How do I find water?',
       );
 
-      expect(prompt, contains('<start_of_turn>'));
-      expect(prompt, contains('<end_of_turn>'));
-      expect(prompt, contains('<start_of_turn> system'));
-      expect(prompt, contains('<start_of_turn> user'));
-      expect(prompt, contains('<start_of_turn> model'));
+      expect(prompt, isNot(contains('<start_of_turn>')));
+      expect(prompt, isNot(contains('<end_of_turn>')));
     });
 
-    test('includes system prompt', () {
+    test('includes instruction and Survive AI identity', () {
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],
         history: [],
@@ -30,7 +27,7 @@ void main() {
       expect(prompt, contains('survival'));
     });
 
-    test('injects context from chunks', () {
+    test('injects context from chunks as reference material', () {
       final chunks = [
         const DocChunk(
           id: 'c1',
@@ -48,25 +45,22 @@ void main() {
         userMessage: 'How do I find water?',
       );
 
-      expect(prompt, contains('[CONTEXT]'));
-      expect(prompt, contains('[/CONTEXT]'));
+      expect(prompt, contains('Reference information'));
       expect(prompt, contains('flowing streams'));
-      expect(prompt, contains('jungle/water_doc'));
+      expect(prompt, contains('jungle'));
     });
 
-    test('omits context block when no chunks provided', () {
+    test('omits reference block when no chunks provided', () {
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],
         history: [],
         userMessage: 'test',
       );
 
-      // The system prompt instruction text mentions [CONTEXT] generically,
-      // but the actual context block with [/CONTEXT] should not appear.
-      expect(prompt, isNot(contains('[/CONTEXT]')));
+      expect(prompt, isNot(contains('Reference information')));
     });
 
-    test('trims history to last 6 turns', () {
+    test('trims history to last 4 turns', () {
       final history = List.generate(10, (i) => ChatMessage(
         role: i.isEven ? 'user' : 'assistant',
         content: 'Message $i',
@@ -79,25 +73,78 @@ void main() {
         userMessage: 'current question',
       );
 
-      // Should not contain early messages
+      // Should not contain early messages (only last 4 kept)
       expect(prompt, isNot(contains('Message 0')));
       expect(prompt, isNot(contains('Message 1')));
       expect(prompt, isNot(contains('Message 2')));
       expect(prompt, isNot(contains('Message 3')));
-      // Should contain later messages
-      expect(prompt, contains('Message 4'));
+      expect(prompt, isNot(contains('Message 4')));
+      expect(prompt, isNot(contains('Message 5')));
+      // Should contain last 4 messages
+      expect(prompt, contains('Message 6'));
       expect(prompt, contains('Message 9'));
     });
 
-    test('ends with open model turn for generation', () {
+    test('ends with user question', () {
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],
         history: [],
-        userMessage: 'test',
+        userMessage: 'How do I stop bleeding?',
       );
 
-      expect(prompt.endsWith('<start_of_turn> model\n'), isTrue);
+      expect(prompt.trimRight(), endsWith('Question: How do I stop bleeding?'));
+    });
+
+    test('places instruction after context and before question', () {
+      final chunks = [
+        const DocChunk(
+          id: 'c1',
+          docId: 'doc1',
+          topic: 'medical',
+          headingPath: 'Bleeding',
+          body: 'Apply pressure to the wound.',
+          chunkIndex: 0,
+        ),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: chunks,
+        history: [],
+        userMessage: 'How do I stop bleeding?',
+      );
+
+      final contextPos = prompt.indexOf('Apply pressure');
+      final instructionPos = prompt.indexOf('Survive AI');
+      final questionPos = prompt.indexOf('Question:');
+
+      // Context first, then instruction, then question
+      expect(contextPos, lessThan(instructionPos));
+      expect(instructionPos, lessThan(questionPos));
+    });
+
+    test('uses Q/A format for history', () {
+      final history = [
+        ChatMessage(
+          role: 'user',
+          content: 'previous question',
+          timestamp: DateTime.now(),
+        ),
+        ChatMessage(
+          role: 'assistant',
+          content: 'previous answer',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [],
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      expect(prompt, contains('Q: previous question'));
+      expect(prompt, contains('A: previous answer'));
+      expect(prompt, contains('Previous exchange:'));
     });
   });
-
 }

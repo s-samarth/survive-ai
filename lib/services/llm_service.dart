@@ -70,7 +70,13 @@ class LlmService {
     _session = await _model!.createSession(temperature: 0.7, topK: 40);
 
     await _session!.addQueryChunk(Message(text: prompt));
-    yield* _session!.getResponseAsync();
+
+    // handleError converts native inference failures into Dart exceptions
+    // that the caller's try-catch can handle gracefully (show error in UI)
+    // instead of crashing the app.
+    yield* _session!.getResponseAsync().handleError((error) {
+      throw StateError('Inference failed: $error');
+    });
   }
 
   Future<void> disposeAsync() async {

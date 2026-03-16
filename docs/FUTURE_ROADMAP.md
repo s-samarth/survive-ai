@@ -4,18 +4,19 @@ This document outlines what comes after the MVP (Phases 0–4). Items are groupe
 
 ---
 
-## What the MVP Delivers (Phases 0–4, Complete)
+## What the MVP Delivers (Complete)
 
-The current implementation is a fully working offline Android app:
+The current implementation is a fully working offline Android app optimized for 4GB edge devices:
 
-- Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~500MB) via flutter_gemma (MediaPipe LLM Inference)
+- Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~500MB) via flutter_gemma (MediaPipe LLM Inference), CPU backend
 - First-launch flow: disclaimer, WiFi check, resumable model download, SHA-256 verification, doc sync
-- RAG over community survival docs — BM25 keyword search via SQLite FTS5
-- Offline chat: user message → BM25 retrieval → prompt built → LLM streams response
+- 2-leg hybrid RAG: BM25 exact keyword search + BM25 on synonym-expanded queries (130+ survival-domain mappings), merged via Reciprocal Rank Fusion (K=60)
+- Instruction-last prompt engineering: short instruction (~60 tokens) placed right before the question where 2B models attend most strongly
+- Memory safety: KV cache recycled per turn, 50ms UI batching, stream error handling, token budget system (3500 max)
+- Offline chat: user message → query expansion → 2-leg BM25 retrieval → RRF merge → instruction-last prompt → Gemma streams response
 - Topic browser: 6 categories (War, Medical, Jungle, Desert, Urban, General) with Markdown doc reader
 - WiFi-gated doc sync: download only changed docs, verify checksums, re-index
-- Sync status banner: notifies user when new docs are available
-- Settings screen: storage info, manual sync
+- Zero-Wait RAG: survival guides bundled as Flutter assets, available before any network sync
 - Direct APK distribution — no app store required
 
 ---
@@ -48,16 +49,20 @@ The current implementation is a fully working offline Android app:
 
 ---
 
-### Semantic Search (RAG Phase 2)
-**Why it matters:** BM25 fails when keywords don't match. "I can't breathe" won't find "respiratory distress" docs. Semantic search bridges this gap.
+### Dense Retrieval (Third RRF Leg)
+**Why it matters:** Query expansion bridges most vocabulary gaps, but true semantic similarity (e.g., "I feel dizzy and cold" → "hypovolemic shock symptoms") requires neural embeddings. The 3-way RRF infrastructure is already built — only the embedding model is missing.
 
-**Approach:**
-- Add `all-MiniLM-L6-v2.onnx` (~22MB embedding model) via `onnxruntime_flutter`
-- Add `sqlite-vec` SQLite extension for on-device vector search
-- Hybrid BM25 + vector retrieval with RRF re-ranking
-- Generate embeddings for all chunks at ingestion time; store in `chunks.embedding` (column already in schema)
+**Current state:** `RagService` already runs 3-way RRF merge. Leg 1 (BM25 exact) and Leg 2 (BM25 expanded via QueryExpander) are active. Leg 3 (dense) returns empty and is gracefully skipped. The `embedding BLOB` column exists in the `chunks` table. The `EmbeddingService` interface is defined.
 
-**Effort:** Medium — packages exist, the schema already has the `embedding BLOB` column, integration is the main work.
+**What's needed:**
+- A small embedding model (e.g., `all-MiniLM-L6-v2.onnx` at ~22MB) that can coexist with Gemma on 6-8GB devices
+- Implement `EmbeddingService.embedQuery()` to return real vectors
+- The existing `_denseRetrieveWithVector()` handles cosine similarity — no pipeline changes needed
+- Consider lifecycle management: load embedding model only during retrieval, unload before LLM inference
+
+**Blocked by:** On 4GB devices, any additional ML runtime alongside Gemma causes OOM. This becomes viable as 6-8GB devices become common in target regions.
+
+**Effort:** Low-Medium — the infrastructure is ready; only model integration and lifecycle management remain.
 
 ---
 

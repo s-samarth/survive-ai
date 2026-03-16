@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/chat_message.dart';
+import '../models/doc_chunk.dart';
 import '../providers/providers.dart';
 import '../utils/prompt_builder.dart';
 import '../widgets/message_bubble.dart';
@@ -54,7 +55,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final rag = ref.read(ragServiceProvider);
       final llm = ref.read(llmServiceProvider);
 
-      final chunks = await rag.retrieve(text, topicFilter: widget.topicFilter);
+      // Skip RAG for very short/trivial queries (< 3 words).
+      // BM25 on "hi" or "yo" returns irrelevant chunks that confuse the
+      // 2B model into parroting random context instead of responding.
+      final words = text.trim().split(RegExp(r'\s+'));
+      final chunks = words.length >= 3
+          ? await rag.retrieve(text, topicFilter: widget.topicFilter)
+          : <DocChunk>[];
 
       // Pass only the history BEFORE the current user message.
       // Previously, the filter bug passed the current user message in BOTH

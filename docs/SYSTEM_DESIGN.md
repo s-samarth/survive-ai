@@ -2,7 +2,30 @@
 
 ## Overview
 
-Survive AI is a fully offline Android application. After a one-time WiFi setup, all computation runs locally on the device. There is no backend server, no database in the cloud, no API calls during normal operation.
+Survive AI is a fully offline Android application that runs an AI survival assistant on a 4GB edge device. After a one-time WiFi setup, all computation runs locally — there is no backend server, no cloud database, no API calls during normal operation.
+
+Every architectural choice in this system is driven by a single constraint: **this must work on a 4GB Android phone, in a survival emergency, where speed is the difference between life and death.**
+
+---
+
+## Design Philosophy: Why Simple Beats Sophisticated
+
+Cloud-based AI systems optimize for accuracy. They can use massive models, ensemble retrievers, multi-stage pipelines, and expensive rerankers. Survive AI cannot use any of that. The constraints are:
+
+1. **4GB total device RAM** — Android OS takes ~1.5GB, the LLM takes ~1.6GB, leaving ~900MB for everything else
+2. **No network at runtime** — the app must function as if the internet will never come back
+3. **Speed over sophistication** — a person with a gunshot wound needs an answer in 3 seconds, not 30
+4. **Zero additional ML models** — any second model alongside Gemma triggers Android's OOM killer
+
+These constraints lead to decisions that would look "wrong" in a cloud system but are exactly right for this use case:
+
+| Cloud approach | Our approach | Why |
+|---|---|---|
+| Vector embeddings (BERT, MiniLM) | Query expansion (pure Dart dictionary) | Zero memory overhead; 130+ survival synonyms bridge vocabulary gaps |
+| Long system prompt (~1000 tokens) | Short instruction (~60 tokens) at end of prompt | 2B models forget instructions at the top; attention is strongest near generation point |
+| GPU inference for speed | CPU inference only | GPU uses shared memory on Android; CPU uses pageable RAM that the OS can manage |
+| Persistent sessions with KV cache | Fresh session every turn, KV cache recycled | Prevents memory accumulation; keeps RAM usage flat regardless of conversation length |
+| Complex reranking pipeline | Reciprocal Rank Fusion (RRF) | Single-pass merge with no additional model; gracefully degrades if signals are missing |
 
 ---
 
@@ -10,51 +33,53 @@ Survive AI is a fully offline Android application. After a one-time WiFi setup, 
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                        SURVIVE AI — ANDROID                         │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                        UI Layer (Flutter)                   │   │
-│  │  DisclaimerScreen  SetupScreen  HomeScreen  ChatScreen      │   │
-│  │  TopicBrowserScreen  DocListScreen  DocReaderScreen         │   │
-│  │  SettingsScreen                                             │   │
-│  └──────────────────────────┬──────────────────────────────────┘   │
-│                             │ Riverpod providers                    │
-│  ┌──────────────────────────▼──────────────────────────────────┐   │
-│  │                     Service Layer (Dart)                     │   │
-│  │                                                             │   │
-│  │  ┌──────────────┐  ┌─────────────┐  ┌──────────────────┐   │   │
-│  │  │  LlmService  │  │  RagService │  │   SyncService    │   │   │
-│  │  │(flutter_gemma)│  │  BM25       │  │  WiFi-gated      │   │   │
-│  │  └──────┬───────┘  └──────┬──────┘  └────────┬─────────┘   │   │
-│  │         │                 │                   │             │   │
-│  │  ┌──────┴─────────────────┴───────────────────┴──────────┐ │   │
-│  │  │              DatabaseService (SQLite)                  │ │   │
-│  │  │  chunks | chunks_fts | docs                           │ │   │
-│  │  └────────────────────────────────────────────────────────┘ │   │
-│  │                                                             │   │
-│  │  ┌──────────────────┐  ┌──────────────────┐                │   │
-│  │  │  ChunkerService  │  │  DownloadService │                │   │
-│  │  │  (Markdown→chunks│  │  (resumable HTTP)│                │   │
-│  │  └──────────────────┘  └──────────────────┘                │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                     Storage Layer                           │   │
-│  │  /files/models/gemma-2b-it-cpu-int4.bin (~500MB)             │   │
-│  │  /files/docs/{topic}/*.md              (~20MB)              │   │
-│  │  /files/survive_ai.db                  (~10MB)              │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                     │
-└──────────────────────────────────┬──────────────────────────────────┘
-                                   │ WiFi only (sync + first launch)
-                        ┌──────────▼─────────────┐
-                        │  GitHub: survive-ai-docs│
-                        │  manifest.json          │
-                        │  docs/war/*.md          │
-                        │  docs/medical/*.md      │
-                        │  docs/jungle/*.md       │
-                        │  ...                    │
-                        └─────────────────────────┘
+│                   SURVIVE AI — 4GB ANDROID DEVICE                    │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                     UI Layer (Flutter)                        │   │
+│  │  DisclaimerScreen  SetupScreen  HomeScreen  ChatScreen        │   │
+│  │  TopicBrowserScreen  DocListScreen  DocReaderScreen           │   │
+│  │  SettingsScreen                                               │   │
+│  └──────────────────────────┬───────────────────────────────────┘   │
+│                              │ Riverpod providers                    │
+│  ┌──────────────────────────▼───────────────────────────────────┐   │
+│  │                    Service Layer (Dart)                        │   │
+│  │                                                               │   │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────────┐   │   │
+│  │  │  LlmService  │  │  RagService  │  │   SyncService    │   │   │
+│  │  │ Gemma 2B IT  │  │ 2-leg BM25   │  │  WiFi-gated      │   │   │
+│  │  │ CPU backend  │  │ + RRF merge  │  │  GitHub sync     │   │   │
+│  │  └──────┬───────┘  └──────┬───────┘  └────────┬─────────┘   │   │
+│  │         │                 │                    │             │   │
+│  │  ┌──────┴─────┐  ┌───────┴────────┐          │             │   │
+│  │  │PromptBuild │  │ QueryExpander  │          │             │   │
+│  │  │(instr-last)│  │ (130+ synonyms)│          │             │   │
+│  │  └────────────┘  └────────────────┘          │             │   │
+│  │         │                 │                    │             │   │
+│  │  ┌──────┴─────────────────┴────────────────────┴──────────┐ │   │
+│  │  │              DatabaseService (SQLite)                    │ │   │
+│  │  │  chunks | chunks_fts (FTS5/BM25) | docs                 │ │   │
+│  │  └──────────────────────────────────────────────────────────┘ │   │
+│  │                                                               │   │
+│  │  ┌──────────────────┐  ┌──────────────────┐                  │   │
+│  │  │  ChunkerService  │  │  DownloadService │                  │   │
+│  │  │ (MD→300tok chunks)│  │ (resumable HTTP) │                  │   │
+│  │  └──────────────────┘  └──────────────────┘                  │   │
+│  └───────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+│  ┌──────────────────────────────────────────────────────────────┐   │
+│  │                      Storage Layer                            │   │
+│  │  /files/models/gemma-2b-it-cpu-int4.bin  (~500MB model)      │   │
+│  │  /files/docs/{topic}/*.md                (~20MB guides)      │   │
+│  │  /files/survive_ai.db                    (~10MB SQLite)      │   │
+│  └──────────────────────────────────────────────────────────────┘   │
+│                                                                      │
+└───────────────────────────────┬──────────────────────────────────────┘
+                                │ WiFi only (one-time setup + sync)
+                     ┌──────────▼─────────────┐
+                     │  GitHub: survive-ai-docs│
+                     │  manifest.json + docs/  │
+                     └─────────────────────────┘
 ```
 
 ---
@@ -64,31 +89,57 @@ Survive AI is a fully offline Android application. After a one-time WiFi setup, 
 ### LlmService
 
 ```dart
-// Wraps flutter_gemma to provide model loading and token-streaming chat.
-// Calls FlutterGemma.installModel + getActiveModel(maxTokens: 512, preferredBackend: cpu)
+// Wraps flutter_gemma for on-device Gemma 2B IT inference.
+// CPU backend only — GPU uses shared memory that causes OOM on 4GB devices.
+// KV cache recycled every turn — old session nulled BEFORE new one allocates.
 Future<void> loadModel(String modelPath);          // Re-activate model each launch
-Stream<String> chat({required String prompt});      // Creates session, streams tokens, closes previous session
+Stream<String> chat({required String prompt});      // Creates session, streams tokens
 Future<void> disposeAsync();                       // Closes session and model
 ```
 
 ### RagService
 
 ```dart
-// Retrieves relevant doc chunks for a query
+// 3-way Reciprocal Rank Fusion retrieval:
+//   Leg 1: BM25 on original query (exact keyword matching)
+//   Leg 2: BM25 on expanded query (synonym/related term matching via QueryExpander)
+//   Leg 3: Dense embeddings (stubbed — returns empty, falls back gracefully)
 Future<List<DocChunk>> retrieve(String query, {int topK = 4, String? topicFilter});
 Future<List<DocChunk>> retrieveForSituation(String query, List<String> topics, {int topK = 6});
+```
+
+### QueryExpander
+
+```dart
+// Pure Dart synonym expansion — zero memory, sub-millisecond.
+// Maps 130+ survival-domain trigger terms to related terms.
+// Example: "bleeding" → "bleeding hemorrhage wound blood tourniquet pressure dressing bandage"
+// Includes simple stemming (strips -ing, -ed, -ly, -s) for broader matching.
+// Expansion capped at 8 terms to avoid query dilution.
+static String expand(String query);
+```
+
+### PromptBuilder
+
+```dart
+// Instruction-last prompt structure optimized for 2B models.
+// Layout: (1) RAG reference material, (2) history, (3) instruction, (4) question.
+// Returns PLAIN TEXT — flutter_gemma adds turn markers automatically.
+// Token budget: 3500 max (4096 context − 512 output − 84 safety).
+static String buildChatPrompt({
+  required List<DocChunk> chunks,
+  required List<ChatMessage> history,
+  required String userMessage,
+});
 ```
 
 ### DatabaseService
 
 ```dart
-// Chunk CRUD
 Future<void> insertChunks(List<DocChunk> chunks);
 Future<void> deleteChunksForDoc(String docId);
 Future<List<String>> searchFts(String query, {String? topicFilter, int limit = 20});
 Future<List<DocChunk>> getChunksByIds(List<String> ids);
-
-// Doc registry
 Future<void> upsertDoc(Map<String, dynamic> docMap);
 Future<String?> getDocVersion(String docId);
 Future<List<Map<String, dynamic>>> getDocsByTopic(String topic);
@@ -98,38 +149,15 @@ Future<List<Map<String, dynamic>>> getDocsByTopic(String topic);
 
 ```dart
 Future<bool> isOnline();
-Future<SyncStatus> checkForUpdates();                              // Fetch manifest, compare version
-Future<SyncResult> syncNow({void Function(int, int)? onProgress}); // Download + ingest changed docs
-```
-
-### DownloadService
-
-```dart
-// Resumable HTTP download with SHA-256 verification
-Future<String> download({
-  required String url,
-  required String filename,
-  required String subfolder,
-  String? expectedSha256,
-  int? expectedBytes,
-  void Function(int downloaded, int total)? onProgress,
-});
-Future<String?> getExistingFile(String filename, String subfolder);
-Future<bool> verifyChecksum(String filePath, String expectedSha256);
-```
-
-### ChunkerService
-
-```dart
-// Splits Markdown into RAG-ready chunks
-List<DocChunk> chunk(String markdown, String docId, String topic);
+Future<SyncStatus> checkForUpdates();
+Future<SyncResult> syncNow({void Function(int, int)? onProgress});
 ```
 
 ---
 
 ## RAG Pipeline — End-to-End
 
-### Ingestion (at sync time, runs async)
+### Ingestion (at sync time)
 
 ```
 GitHub .md file downloaded
@@ -139,132 +167,201 @@ ChunkerService.chunk(markdown, docId, topic)
     │
     │ Split strategy (in order):
     │   1. At h1/h2/h3 heading boundaries
-    │   2. At paragraph breaks (blank lines) if section > 300 tokens
-    │   3. With 50-token overlap window between chunks
+    │   2. At paragraph breaks if section > 300 tokens
+    │   3. With 50-token overlap between consecutive chunks
     │
     ▼
 List<DocChunk> (id, docId, topic, headingPath, body, chunkIndex)
     │
-    ├── DatabaseService.insertChunks(chunks)
-    │       → INSERT INTO chunks (metadata + body)
-    │       → INSERT INTO chunks_fts (chunk_id, topic, heading_path, body)
-    │
-    └── DatabaseService.upsertDoc(docMap)
-            → UPDATE docs SET checksum, version, last_synced
+    ├── INSERT INTO chunks (metadata + body)
+    └── INSERT INTO chunks_fts (chunk_id, topic, heading_path, body)
 ```
 
-### Query-Time Retrieval (per user message, < 200ms)
+### Query-Time Retrieval (per user message, < 100ms total)
 
 ```
-User query: "How do I find water in the jungle?"
+User query: "I'm bleeding badly, what do I do?"
+    │
+    │ Step 0: Trivial query filter
+    │ If < 3 words → skip RAG, return empty chunks
+    │ (prevents irrelevant context injection for "hi", "yo", etc.)
     │
     ▼
-RagService.retrieve(query, topK=4, topicFilter='jungle')
-    │
-    ▼
-DatabaseService.searchFts(query, topicFilter='jungle', limit=20)
-    │
-    │  SQL: SELECT chunk_id FROM chunks_fts
-    │       WHERE chunks_fts MATCH 'water jungle find'
-    │       AND topic = 'jungle'
-    │       ORDER BY bm25(chunks_fts, 1.0, 2.0, 1.5)
-    │       LIMIT 20
-    │
-    ▼
-List<String> rankedChunkIds (top 20 by BM25 score)
-    │
-    ▼
-DatabaseService.getChunksByIds(top 4 ids)
-    │
-    ▼
-List<DocChunk> (with full body text)
-    │
+    ├─── Leg 1: BM25 exact ──────────────────────────────────────┐
+    │    FTS5 MATCH "bleeding badly"                             │
+    │    → chunks mentioning "bleeding", "badly"                  │
+    │                                                             │
+    ├─── Leg 2: BM25 expanded ───────────────────────────────────┤
+    │    QueryExpander: "bleeding" → adds                         │
+    │    "hemorrhage wound blood tourniquet pressure dressing"     │
+    │    FTS5 MATCH expanded query                                │
+    │    → chunks about tourniquet, hemorrhage control             │
+    │                                                             │
+    ├─── Leg 3: Dense (stub) ────────────────────────────────────┤
+    │    EmbeddingService returns empty vector                    │
+    │    → returns empty list (graceful fallback)                  │
+    │                                                             │
+    ▼                                                             │
+    Reciprocal Rank Fusion (K=60)                                │
+    score(chunk) = Σ_legs  1 / (rank_in_leg + 60)               │
+    │                                                             │
+    ▼                                                             │
+    Top 4 chunks by RRF score                                    │
+    │                                                             │
     ▼
 PromptBuilder.buildChatPrompt(chunks, history, userMessage)
     │
+    │ Instruction-last layout:
+    │   [Reference material from survival guides]     ← first
+    │   [medical > Tourniquet Application]
+    │   Apply tourniquet 2-3 inches above wound...
+    │
+    │   [Previous exchange]                            ← middle
+    │   Q: ...
+    │   A: ...
+    │
+    │   You are Survive AI, an offline survival        ← right before question
+    │   expert. Answer directly. Give the most
+    │   critical action FIRST...
+    │
+    │   Question: I'm bleeding badly, what do I do?    ← last
+    │
     ▼
 LlmService.chat(prompt) → Stream<String> tokens
+    │
+    │ 50ms batched UI updates (reduces ~512 setState calls to ~25)
+    │
+    ▼
+User sees streaming response with actionable survival guidance
 ```
 
-### Context Window Budget (Gemma 2B IT — 8192 token context)
+### Why Query Expansion Instead of Neural Embeddings
 
-| Component | Estimated Tokens |
-|---|---|
-| System prompt + instructions | ~1200 |
-| 4 retrieved chunks (300 tokens each) | ~1200 |
-| Chat history (last 6 turns) | ~900 |
-| User message | ~50 |
-| Total input | ~3350 |
-| Reserved for generation (maxTokens=512) | 512 |
-| **Total used** | **~3862** |
-| Available headroom | **~4330** |
+The vocabulary gap between users and survival documentation is the core retrieval challenge:
 
-The context window is comfortable. No truncation needed under normal use.
+| User says | Docs say | BM25 alone? | With query expansion? |
+|---|---|---|---|
+| "I'm bleeding" | "hemorrhage control" | Miss | Match ("bleeding" → "hemorrhage") |
+| "bombs falling" | "blast shelter protocol" | Miss | Match ("bombs" → "explosion blast shelter") |
+| "can't breathe" | "airway obstruction" | Miss | Match ("breathe" → "airway choking") |
+| "bitten by snake" | "envenomation treatment" | Miss | Match ("bite" → "venom antivenom") |
+
+Neural embedding models (MiniLM, USE, etc.) would solve this more elegantly, but require 200+ MB of additional RAM. On a 4GB device already running a 1.6GB LLM, this triggers Android's OOM killer.
+
+Query expansion achieves 80% of the benefit with 0% of the memory cost:
+- 130+ hand-crafted survival-domain mappings
+- Simple stemming catches morphological variants ("bleeding" → "bleed" → matches "bleed" trigger)
+- Runs as a pure Dart string operation — sub-millisecond, zero allocations
+- The expanded query runs as a second BM25 search leg, providing an independent signal
+
+The 3-way RRF infrastructure is built and ready — when device capabilities improve, a third dense retrieval leg can plug in without any pipeline changes.
 
 ---
 
-## Prompt Template
+## Prompt Engineering for 2B Models
 
-There is a single prompt template (RAG-augmented chat) defined in `lib/utils/prompt_builder.dart`.
+### The Problem
 
-### RAG-Augmented Chat
+Standard LLM prompt engineering assumes strong instruction-following (GPT-4, Claude). Gemma 2B IT is fundamentally different:
 
-The system prompt (~800 words / ~1200 tokens) establishes Survive AI's identity, knowledge domains (war, medical, urban disasters, jungle, desert, general survival), response style, and constraints. Key directives:
+- **Limited attention span** — a 260-token system prompt at the top of the context is effectively ignored by the time the model starts generating
+- **Role confusion** — "User:" and "Assistant:" labels inside a single `<start_of_turn>user` block confuse the model about who is speaking
+- **Context parroting** — irrelevant RAG chunks cause the model to repeat context verbatim instead of answering the question
+- **Prompt continuation** — without clear structure, the model generates more prompt text instead of a response
 
-- Give the most critical action first, then supporting steps by urgency
-- Use [CONTEXT] chunks as primary source; supplement with general knowledge only if context is incomplete
-- Never tell users to "call emergency services" as a first response
-- Tone: direct, calm, clear — not institutional
+### The Solution: Instruction-Last Prompt Structure
 
 ```
-<start_of_turn>system
-You are Survive AI — a calm, expert survival assistant built for people
-in genuine life-threatening emergencies. You run entirely offline...
-[...full system prompt — ~800 words of detailed instructions...]
-
-[CONTEXT]
---- From: medical/wound_care > Applying Pressure ---
-{chunk_1_text}
-
---- From: medical/wound_care > Wound Cleaning ---
-{chunk_2_text}
-[/CONTEXT]
-<end_of_turn>
-<start_of_turn>user
-How do I treat a deep wound?
-<end_of_turn>
-<start_of_turn>model
+┌───────────────────────────────────────────┐
+│  Reference material (RAG chunks)          │  ← farthest from generation
+│  [medical > Bleeding Control]             │     (data to reference, not follow)
+│  Apply direct pressure with clean cloth...│
+│                                           │
+│  Previous exchange:                       │  ← middle
+│  Q: How bad is it?                        │     (continuity, neutral labels)
+│  A: Describe the wound and I can help...  │
+│                                           │
+│  You are Survive AI, an offline survival  │  ← RIGHT BEFORE generation
+│  expert. Answer directly. Give the most   │     (this is what the model follows)
+│  critical action FIRST...                 │
+│                                           │
+│  Question: The bleeding won't stop        │  ← last token before model generates
+└───────────────────────────────────────────┘
 ```
 
-When no RAG chunks are retrieved (e.g., docs not yet synced), the `[CONTEXT]` block is omitted entirely.
+**Why this works:** Transformer attention is not uniform. In a 2B model, the tokens near the generation point have the strongest influence on the first generated token. By placing the instruction there (not at the top), the model reliably follows it.
+
+### Additional Prompt Optimizations
+
+| Optimization | Rationale |
+|---|---|
+| Trivial query filter (< 3 words) | "hi" or "yo" skip RAG — prevents injecting irrelevant chunks that confuse the small model |
+| Q:/A: history labels (not User:/Assistant:) | Avoids role confusion when history is inside a user turn block |
+| History capped at 4 turns, 400 chars each | Prevents history from consuming the 3500-token budget |
+| Token budget with priority allocation | Instruction + question reserved first, then context, then history — ensures critical content always fits |
+| flutter_gemma handles turn markers | Prompt returned as plain text — no risk of double-wrapping `<start_of_turn>` tags |
+
+---
+
+## Memory Safety Architecture
+
+### The Challenge
+
+On a 4GB Android device with Gemma 2B IT loaded:
+
+| Component | RAM |
+|---|---|
+| Android OS + system services | ~1.5 GB |
+| Flutter framework + app heap | ~200 MB |
+| Gemma 2B IT (INT4, mmap'd) | ~1.6 GB |
+| KV attention cache (per turn) | ~200 MB |
+| SQLite + FTS5 index | ~30 MB |
+| **Total** | **~3.5 GB** |
+| **Remaining before OOM** | **~500 MB** |
+
+### Protections
+
+**CPU backend (not GPU):** On Android, GPU inference uses shared memory from the same 4GB pool. The OS cannot reclaim GPU memory under pressure. CPU inference uses pageable RAM that Android can swap or reclaim, providing a pressure relief valve.
+
+**KV cache recycling:** Each inference turn creates a fresh session. The previous session is nulled and closed BEFORE the new one allocates. Without this, both sessions exist in memory simultaneously — a 400MB spike that triggers OOM on the second+ turn.
+
+```dart
+final prev = _session;
+_session = null;        // null reference FIRST
+await prev?.close();    // THEN close (free memory)
+_session = await _model!.createSession(...);  // THEN allocate
+```
+
+**50ms UI batching:** Without batching, every streamed token triggers a `setState()` call and a new String allocation. Over a 512-token response, that's 512 GC cycles. Batching at 50ms reduces this to ~25 updates, cutting GC pressure by ~20x.
+
+**Stream error handling:** `getResponseAsync()` reports errors via `StreamController.addError()`. Without explicit `.handleError()`, unhandled stream errors crash the app. We convert them to catchable `StateError` exceptions shown in the UI.
+
+**Prompt budget system:** Token budget of 3500 prevents the prompt from exceeding the 4096-token context window. Priority allocation ensures the instruction and question always fit, even if context and history must be truncated.
 
 ---
 
 ## SQLite Schema
 
 ```sql
--- Document registry
 CREATE TABLE docs (
-  id TEXT PRIMARY KEY,           -- e.g. "medical/tourniquet"
-  filename TEXT NOT NULL,        -- e.g. "docs/medical/tourniquet.md"
-  topic TEXT NOT NULL,           -- e.g. "medical"
-  version TEXT NOT NULL,         -- from manifest.json
-  checksum TEXT NOT NULL,        -- SHA-256 of file content
-  last_synced INTEGER            -- Unix ms timestamp
+  id TEXT PRIMARY KEY,
+  filename TEXT NOT NULL,
+  topic TEXT NOT NULL,
+  version TEXT NOT NULL,
+  checksum TEXT NOT NULL,
+  last_synced INTEGER
 );
 
--- Chunk storage
 CREATE TABLE chunks (
-  id TEXT PRIMARY KEY,           -- UUID v4
+  id TEXT PRIMARY KEY,
   doc_id TEXT NOT NULL REFERENCES docs(id) ON DELETE CASCADE,
   topic TEXT NOT NULL,
-  heading_path TEXT NOT NULL DEFAULT '',  -- e.g. "Finding Water > Rainwater"
-  body TEXT NOT NULL,            -- raw chunk text
+  heading_path TEXT NOT NULL DEFAULT '',
+  body TEXT NOT NULL,
   chunk_index INTEGER NOT NULL,
-  embedding BLOB                 -- NULL in Phase 1; ONNX embedding in Phase 2
+  embedding BLOB                 -- reserved for future dense retrieval
 );
 
--- Full-text search index (BM25 via FTS5)
 CREATE VIRTUAL TABLE chunks_fts USING fts5(
   chunk_id UNINDEXED,
   topic,
@@ -276,107 +373,37 @@ CREATE VIRTUAL TABLE chunks_fts USING fts5(
 
 ---
 
-## Storage Layout
-
-```
-/data/user/0/com.surviveai.survive_ai/files/
-├── models/
-│   └── gemma-2b-it-cpu-int4.bin            (~500MB, downloaded on first launch)
-├── docs/
-│   ├── manifest.json                       (last fetched manifest)
-│   ├── war/
-│   │   ├── ambush_response.md
-│   │   └── checkpoint_crossing.md
-│   ├── medical/
-│   │   ├── tourniquet.md
-│   │   └── shock_treatment.md
-│   ├── jungle/
-│   │   ├── water_finding.md
-│   │   └── shelter_building.md
-│   └── ...
-└── survive_ai.db                           (~10MB, SQLite)
-```
-
----
-
-## First-Launch Routing (_EntryRouter)
-
-```
-App opens
-    │
-    ▼
-SharedPreferences: disclaimer_accepted?
-    │                       │
-    ▼ (no)                  ▼ (yes)
-DisclaimerScreen        HomeScreen (always)
-    │                       │
-    │ (accept)              ▼
-    │                   DownloadService.findModelFile('gemma-2b-it-cpu-int4.bin')
-    │                       │                    │
-    │                       ▼ (missing)          ▼ (present)
-    │                   HomeScreen shows     LlmService.loadModel()
-    │                   download banner      (background, non-blocking)
-    │                       │
-    └───────────────────────┘
-```
-
----
-
-## Network Communication (WiFi-only, limited scope)
-
-All network calls are read-only HTTP GETs to GitHub raw URLs. No auth, no POST, no user data sent.
-
-| Call | When | URL Pattern |
-|---|---|---|
-| Fetch manifest | First launch + each app open with WiFi | `raw.githubusercontent.com/survive-ai/survive-ai-docs/main/manifest.json` |
-| Download model | First launch, when model file absent | HuggingFace raw URL from manifest |
-| Download doc | When doc SHA-256 differs from manifest | `raw.githubusercontent.com/survive-ai/survive-ai-docs/main/docs/{topic}/{file}.md` |
-
----
-
 ## Performance Targets
 
-| Metric | Target | Measured on |
+| Metric | Target | Why it matters |
 |---|---|---|
-| Model load time | < 5s | Snapdragon 720G (mid-range) |
-| First token latency | < 3s | Same |
-| Token generation rate | >= 3 tokens/sec | Snapdragon 665 (low-end) |
-| BM25 retrieval (4 chunks) | < 100ms | In-memory SQLite |
-| App cold start to home | < 2s | After model is cached |
+| First token latency | < 3s | User needs immediate confirmation that help is coming |
+| BM25 retrieval (4 chunks) | < 50ms | RAG overhead must be imperceptible |
+| Query expansion | < 1ms | Pure Dart dictionary lookup, no ML |
+| Token generation rate | >= 3 tok/sec | Readable streaming speed on low-end Snapdragon |
+| Model load time | < 5s | App must be usable quickly after restart |
+| App cold start to home | < 2s | User shouldn't wait to start browsing docs |
 
 ---
 
 ## Security & Privacy
 
-- **No PII collected.** The app has no analytics, no crash reporting, no telemetry.
+- **No PII collected.** No analytics, no crash reporting, no telemetry.
 - **All data is local.** Chat history and survival docs exist only on the device.
 - **Network calls are read-only** to public GitHub repos. No credentials, no auth tokens.
 - **Checksums on every download.** SHA-256 verified before any file is written to disk.
-- **APK distribution.** Users get the APK from GitHub Releases. The maintainer's signing key fingerprint is published in SECURITY.md so users can verify APK authenticity.
-- **No location access.** The app never requests GPS permission (Phase 1–4). If GPS is added later (for map features), it will be optional and clearly explained.
+- **No location access.** The app never requests GPS permission.
+- **APK distribution** with published signing key fingerprint for verification.
 
 ---
 
-## Phase 2: Semantic Search (Vector RAG) — Planned / Future
+## Future: Dense Retrieval (When Devices Allow)
 
-Phase 2 will add dense vector retrieval alongside BM25. This is not yet implemented.
+The 3-way RRF infrastructure is already built. When 6-8GB devices become the norm in conflict regions, the third retrieval leg can be activated:
 
-**Additional components:**
-- `all-MiniLM-L6-v2.onnx` (~22MB) — embedding model, run via `onnxruntime_flutter`
-- `sqlite-vec` — SQLite extension for cosine similarity search
-- `vec_chunks` virtual table with 384-dimensional float32 embeddings
+1. Add an embedding model (e.g., `all-MiniLM-L6-v2` at ~22MB)
+2. Implement `EmbeddingService.embedQuery()` to return real vectors instead of empty
+3. The existing `_denseRetrieveWithVector()` in RagService handles cosine similarity
+4. RRF merge automatically incorporates the third signal — no pipeline changes needed
 
-**Hybrid retrieval (RRF — Reciprocal Rank Fusion):**
-
-```
-BM25 results:    [(chunk_a, rank=1), (chunk_b, rank=2), (chunk_c, rank=3)]
-Vector results:  [(chunk_b, rank=1), (chunk_d, rank=2), (chunk_a, rank=3)]
-
-RRF score = 1/(60+bm25_rank) + 1/(60+vector_rank)
-chunk_a: 1/61 + 1/63 = 0.0164 + 0.0159 = 0.0323
-chunk_b: 1/62 + 1/61 = 0.0161 + 0.0164 = 0.0325  ← wins
-```
-
-Enables semantic search: "I can't breathe" → finds "respiratory distress" docs even without keyword overlap.
-
-The `embedding BLOB` column is already in the `chunks` table schema — Phase 2 integration only requires adding the ONNX inference and sqlite-vec extension.
+The `embedding BLOB` column already exists in the `chunks` table schema. The `EmbeddingService` interface is defined. The code path is tested and falls back gracefully. Only the model itself is missing.

@@ -69,20 +69,21 @@ android/           Android-specific build config.
 | `lib/services/llm_service.dart` | Wraps `flutter_gemma` (MediaPipe LLM Inference) — `loadModel()`, `chat()` stream |
 | `lib/services/database_service.dart` | Owns SQLite schema; all chunk/doc CRUD |
 | `lib/services/chunker_service.dart` | Markdown to 300-token chunks with 50-token overlap |
-| `lib/services/rag_service.dart` | Hybrid BM25+dense retrieval with RRF merge (dense disabled — stub embeddings) |
-| `lib/services/embedding_service.dart` | Stub embedding service (returns empty, BM25 fallback) |
+| `lib/services/rag_service.dart` | 3-way RRF retrieval: BM25 exact + BM25 expanded + dense (stubbed) |
+| `lib/services/embedding_service.dart` | Stub embedding service — returns empty, dense leg falls back gracefully |
 | `lib/services/sync_service.dart` | WiFi-gated GitHub sync with SHA-256 verification |
 | `lib/services/download_service.dart` | Resumable HTTP downloads with SHA-256 verification |
+| `lib/utils/query_expander.dart` | 130+ survival-domain synonym mappings for BM25 query expansion |
 | `lib/providers/providers.dart` | All Riverpod providers + `llmReadyProvider` |
 | `lib/screens/disclaimer_screen.dart` | First-launch safety acknowledgement |
 | `lib/screens/setup_screen.dart` | Setup flow: WiFi check, manifest fetch, download, sync, load |
 | `lib/screens/home_screen.dart` | Main screen with Chat/Topics tabs + Assess FAB |
-| `lib/screens/chat_screen.dart` | RAG chat with intent classification |
+| `lib/screens/chat_screen.dart` | RAG chat with streaming + trivial query filtering |
 | `lib/screens/topic_browser_screen.dart` | 2x3 grid of topic cards |
 | `lib/screens/doc_list_screen.dart` | List of docs within a topic |
 | `lib/screens/doc_reader_screen.dart` | Full Markdown renderer + "Ask AI" button |
 | `lib/screens/settings_screen.dart` | Storage info, sync controls |
-| `lib/utils/prompt_builder.dart` | Chat prompt template |
+| `lib/utils/prompt_builder.dart` | Instruction-last prompt template (optimized for 2B models) |
 | `lib/widgets/message_bubble.dart` | Chat bubble with `BlinkingCursor` animation |
 | `lib/widgets/sync_status_banner.dart` | Auto-check banner for available doc updates |
 
