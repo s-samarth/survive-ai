@@ -126,6 +126,11 @@ class _EntryRouterState extends ConsumerState<_EntryRouter> {
       debugPrint('CRITICAL: Failed to load model in background: $e');
       debugPrint('$st');
       ref.read(llmErrorProvider.notifier).state = e.toString();
+      // Clear the crash-detection flag — we reached the catch block, so
+      // this is a normal exception (not an OOM/SIGKILL). Leaving the flag
+      // set would incorrectly show the repair banner on next launch.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('model_load_pending', false);
     }
   }
 
