@@ -87,7 +87,8 @@ def run_config(
             out_corpus += 1
             abstained += 1 if not ranked else 0
             continue
-        results.append(evaluate_case(ranked, matcher, [h.citation for h in hits]))
+        cited = retriever.citations_for(hits, case.query, limit=EVAL_DEPTH)
+        results.append(evaluate_case(ranked, matcher, cited))
 
     by_slice: dict[str, dict[str, float]] = {}
     for name in goldset.slice_names():
