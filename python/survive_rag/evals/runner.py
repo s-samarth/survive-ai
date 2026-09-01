@@ -7,7 +7,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from ..config import RetrievalConfig
-from ..corpus.chunker import ChunkConfig
 from ..corpus.loader import load_corpus
 from ..corpus.models import Corpus
 from ..retrieval.pipeline import Retriever
@@ -29,6 +28,7 @@ class ConfigReport:
         by_slice: Mean of each metric per slice tag.
         abstention: Fraction of out-of-corpus cases that returned nothing.
         n_children: Corpus size the run used, for context in the report.
+        n_units: Number of units actually indexed at this granularity.
         seconds: Wall-clock time for the whole sweep of this config.
     """
 
@@ -38,6 +38,7 @@ class ConfigReport:
     by_slice: dict[str, dict[str, float]] = field(default_factory=dict)
     abstention: float = 0.0
     n_children: int = 0
+    n_units: int = 0
     seconds: float = 0.0
 
     @property
@@ -71,7 +72,7 @@ def run_config(
     Returns:
         A populated :class:`ConfigReport`.
     """
-    corpus = corpus or load_corpus(cfg=config.chunking)
+    corpus = corpus or load_corpus(cfg=config.chunking, passages=config.passages)
     retriever = Retriever(corpus=corpus, config=config)
     matchers = resolve(goldset, reference or corpus, corpus)
     started = time.perf_counter()
@@ -100,6 +101,7 @@ def run_config(
         by_slice=by_slice,
         abstention=abstained / out_corpus if out_corpus else 0.0,
         n_children=len(corpus),
+        n_units=len(corpus.units(config.granularity)),
         seconds=time.perf_counter() - started,
     )
 
@@ -140,14 +142,15 @@ def run_sweep(
             + ", ".join(c.case_id for c in stale[:10])
         )
 
-    cache: dict[object, Corpus] = {ChunkConfig(): reference}
+    cache: dict[object, Corpus] = {RetrievalConfig().corpus_key: reference}
     reports: list[ConfigReport] = []
     for config in configs:
-        if config.chunking not in cache:
-            cache[config.chunking] = load_corpus(root, cfg=config.chunking)
-        reports.append(
-            run_config(config, goldset, cache[config.chunking], reference)
-        )
+        key = config.corpus_key
+        if key not in cache:
+            cache[key] = load_corpus(
+                root, cfg=config.chunking, passages=config.passages
+            )
+        reports.append(run_config(config, goldset, cache[key], reference))
 
     return reports
 

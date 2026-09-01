@@ -1,22 +1,26 @@
-"""The retriever: query in, ranked children and expanded parents out.
+"""The retriever: query in, ranked units and expanded parents out.
 
 Stages, in order:
 
-    1. **Legs**   -- BM25 over the literal query, BM25 over the expanded query.
-    2. **Fusion** -- RRF merges the leg rankings without score normalisation.
+    1. **Legs**   -- BM25 literal, BM25 expanded, and cosine over embeddings.
+    2. **Fusion** -- RRF merges the leg rankings without score normalisation,
+       which is what lets a cosine in [0,1] and a BM25 score in [0,30] be
+       combined at all.
     3. **Rerank** -- heuristic features refine the fused top-N.
     4. **MMR**    -- diversify so the model sees do *and* don't, not four don'ts.
-    5. **Expand** -- children carry their parent section, under a token budget.
+    5. **Expand** -- units carry their parent section, under a token budget.
 
-Only step 5 is about generation; steps 1-4 are what the retrieval eval scores.
+Retrieval runs at ``config.granularity`` but every result still resolves to a
+child id for the citation, so scoring size and citation size are independent.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import Any
 
 from ..config import RetrievalConfig
-from ..corpus.models import ChildChunk, Corpus, ParentChunk
+from ..corpus.models import Corpus, ParentChunk
 from .bm25 import BM25Index, build_index
 from .expansion import expand
 from .fusion import reciprocal_rank_fusion
@@ -26,18 +30,19 @@ from .tokenizer import index_terms, tokenize
 
 @dataclass(frozen=True, slots=True)
 class RetrievedChunk:
-    """One result: the matched child plus the context handed to the model."""
+    """One result: the matched unit plus the context handed to the model."""
 
-    child: ChildChunk
+    unit: Any
     rank: int
     score: float
     context: str
+    citation: str
     parent: ParentChunk | None = None
 
     @property
-    def citation(self) -> str:
-        """The stable id a user-facing citation links to."""
-        return self.child.chunk_id
+    def unit_id(self) -> str:
+        """Id of the retrieved unit, at whatever granularity was scored."""
+        return self.unit.chunk_id
 
 
 @dataclass(slots=True)
@@ -47,25 +52,42 @@ class Retriever:
     corpus: Corpus
     config: RetrievalConfig = field(default_factory=RetrievalConfig)
     weights: RerankWeights = field(default_factory=RerankWeights)
-    _index: BM25Index = field(init=False, repr=False)
+    _units: list = field(init=False, repr=False, default_factory=list)
+    _index: BM25Index = field(init=False, repr=False, default=None)
+    _dense: Any = field(init=False, repr=False, default=None)
 
     def __post_init__(self) -> None:
+        self._units = self.corpus.units(self.config.granularity)
         self._index = build_index(
-            [(c.chunk_id, self._doc_terms(c)) for c in self.corpus.children]
+            [(u.chunk_id, self._doc_terms(u)) for u in self._units]
         )
+        if self.config.use_dense_leg:
+            self._dense = self._build_dense()
 
-    def _doc_terms(self, chunk: ChildChunk) -> list[str]:
-        """Terms for one child, with heading text repeated as a field weight.
+    def _build_dense(self) -> Any:
+        """Embed every unit, reusing the on-disk vector cache."""
+        from .dense import build_dense_index
+        from .embedder import load_embedder
 
-        With ``index_parent_terms`` the child also carries its parent section's
-        vocabulary at low weight, so a 25-token prohibition is still findable
-        by a query that words the situation the way its section does.
+        embedder = load_embedder(
+            self.config.embed_model,
+            backend=self.config.embed_backend,
+            truncate_dim=self.config.embed_dim,
+        )
+        return build_dense_index(self._units, embedder)
+
+    def _doc_terms(self, chunk: Any) -> list[str]:
+        """Terms for one unit, with heading text repeated as a field weight.
+
+        With ``index_parent_terms`` the unit also carries its parent section's
+        vocabulary, so a 25-token prohibition is still findable by a query that
+        words the situation the way its section does.
         """
         terms = index_terms(chunk.text)
         terms += index_terms(chunk.heading_path) * self.config.heading_boost
         if self.config.index_parent_terms:
-            parent = self.corpus.parent(chunk.parent_id)
-            if parent is not None:
+            parent = self.corpus.parent(getattr(chunk, "parent_id", ""))
+            if parent is not None and parent.chunk_id != chunk.chunk_id:
                 terms += index_terms(parent.text)
         return terms
 
@@ -91,12 +113,17 @@ class Retriever:
                 rankings.append([doc for doc, _ in hits])
                 weights.append(cfg.expanded_weight)
 
+        if self._dense is not None:
+            hits = self._dense.search(query, limit=cfg.leg_limit)
+            rankings.append([doc for doc, _ in hits])
+            weights.append(cfg.dense_weight)
+
         return rankings, weights
 
     def retrieve(
         self, query: str, *, topic_hint: str | None = None, top_k: int | None = None
     ) -> list[RetrievedChunk]:
-        """Retrieve the best chunks for ``query``.
+        """Retrieve the best units for ``query``.
 
         Args:
             query: Raw user query, in English, Hindi transliteration, or both.
@@ -115,21 +142,20 @@ class Retriever:
 
         fused = reciprocal_rank_fusion(rankings, k=cfg.rrf_k, weights=leg_weights)
         if not cfg.rerank:
-            picked = [self.corpus.child(cid) for cid, _ in fused[:k]]
-            scores = [s for _, s in fused[:k]]
-            return self._materialise([p for p in picked if p], scores)
+            picked = [(self.corpus.unit(uid), s) for uid, s in fused[:k]]
+            keep = [(u, s) for u, s in picked if u is not None]
+            return self._materialise([u for u, _ in keep], [s for _, s in keep], query)
 
-        candidates = fused[: cfg.rerank_depth]
-        scored: list[tuple[ChildChunk, float]] = []
-        for rank, (chunk_id, _) in enumerate(candidates, start=1):
-            chunk = self.corpus.child(chunk_id)
-            if chunk is None:
+        scored: list[tuple[Any, float]] = []
+        for rank, (unit_id, _) in enumerate(fused[: cfg.rerank_depth], start=1):
+            unit = self.corpus.unit(unit_id)
+            if unit is None:
                 continue
             scored.append(
                 (
-                    chunk,
+                    unit,
                     score_chunk(
-                        chunk,
+                        unit,
                         query=query,
                         fused_rank=rank,
                         topic_hint=topic_hint,
@@ -138,22 +164,24 @@ class Retriever:
                 )
             )
         scored.sort(key=lambda cs: (-cs[1], cs[0].chunk_id))
-        by_id = dict(scored)
+        by_id = {u.chunk_id: s for u, s in scored}
         selected = mmr_select(scored, k=k, lambda_=cfg.mmr_lambda)
-        return self._materialise(selected, [by_id[c] for c in selected])
+        return self._materialise(
+            selected, [by_id[u.chunk_id] for u in selected], query
+        )
 
     def retrieve_ids(self, query: str, *, top_k: int | None = None) -> list[str]:
-        """Return only the ranked chunk ids -- the form the metrics consume."""
-        return [r.child.chunk_id for r in self.retrieve(query, top_k=top_k)]
+        """Return only the ranked unit ids -- the form the metrics consume."""
+        return [r.unit_id for r in self.retrieve(query, top_k=top_k)]
 
     def _materialise(
-        self, chunks: list[ChildChunk], scores: list[float]
+        self, units: list, scores: list[float], query: str
     ) -> list[RetrievedChunk]:
-        """Attach parent context and a token-budget fallback to each result."""
+        """Attach parent context, a token-budget fallback, and a citation."""
         cfg = self.config
         out: list[RetrievedChunk] = []
-        for i, (chunk, score) in enumerate(zip(chunks, scores, strict=True), start=1):
-            parent = self.corpus.parent_of(chunk.chunk_id)
+        for i, (unit, score) in enumerate(zip(units, scores, strict=True), start=1):
+            parent = self.corpus.parent_of(unit.chunk_id)
             fits = (
                 cfg.expand_to_parents
                 and parent is not None
@@ -161,14 +189,31 @@ class Retriever:
             )
             out.append(
                 RetrievedChunk(
-                    child=chunk,
+                    unit=unit,
                     rank=i,
                     score=score,
-                    context=parent.text if fits and parent else chunk.text,
+                    context=parent.text if fits and parent else unit.text,
+                    citation=self._citation_for(unit, query),
                     parent=parent,
                 )
             )
         return out
+
+    def _citation_for(self, unit: Any, query: str) -> str:
+        """Pick the child a citation should link to for a retrieved unit.
+
+        A passage or parent covers several children, so the link points at the
+        one sharing the most query terms rather than simply the first -- the
+        user must land on the sentence that answered them.
+        """
+        kids = [self.corpus.child(c) for c in getattr(unit, "child_ids", ())]
+        kids = [c for c in kids if c is not None]
+        if not kids:
+            return unit.chunk_id
+        terms = set(index_terms(query))
+        return max(
+            kids, key=lambda c: len(terms & set(index_terms(c.text)))
+        ).chunk_id
 
 
 def _stems(word: str) -> list[str]:

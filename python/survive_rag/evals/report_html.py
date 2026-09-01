@@ -85,7 +85,7 @@ def _scorecard(reports: list[ConfigReport]) -> str:
 
 def _gates(report: ConfigReport) -> str:
     """The pass/fail release gates for the leading configuration."""
-    _, messages = gate_status(report)
+    _, _messages = gate_status(report)
     rows = []
     for key, target in TARGETS.items():
         value = report.overall.get(key, 0.0)

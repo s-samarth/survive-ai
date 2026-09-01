@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .chunker import ChunkConfig, chunk_guide
 from .models import Corpus
+from .passages import PassageConfig, build_passages
 from .topics import GUIDES_DIRNAME, TOPIC_KEYS
 
 
@@ -35,13 +36,16 @@ def guides_dir(root: Path | None = None) -> Path:
 
 
 def load_corpus(
-    root: Path | None = None, cfg: ChunkConfig | None = None
+    root: Path | None = None,
+    cfg: ChunkConfig | None = None,
+    passages: PassageConfig | None = None,
 ) -> Corpus:
-    """Chunk every guide in the corpus.
+    """Chunk every guide in the corpus, at all three granularities.
 
     Args:
         root: Repository root; discovered automatically when omitted.
         cfg: Chunk sizing policy; defaults are used when omitted.
+        passages: Retrieval-window sizing; defaults are used when omitted.
 
     Returns:
         A fully populated :class:`Corpus`.
@@ -60,7 +64,9 @@ def load_corpus(
         )
         parents.extend(guide_parents)
         children.extend(guide_children)
-    return Corpus(children=children, parents=parents)
+    pcfg = passages or PassageConfig()
+    windows = build_passages(parents, children, pcfg) if pcfg.enabled else []
+    return Corpus(children=children, parents=parents, passages=windows)
 
 
 def export_index(corpus: Corpus, destination: Path) -> Path:
@@ -82,6 +88,7 @@ def export_index(corpus: Corpus, destination: Path) -> Path:
         "schema": 1,
         "parents": [p.to_json() for p in corpus.parents],
         "children": [c.to_json() for c in corpus.children],
+        "passages": [p.to_json() for p in corpus.passages],
     }
     destination.write_text(
         json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"

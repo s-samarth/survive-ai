@@ -97,20 +97,20 @@ def test_rrf_rejects_mismatched_weights() -> None:
 def test_retriever_returns_ranked_results(corpus: Corpus) -> None:
     hits = Retriever(corpus=corpus).retrieve("snake bite first aid", top_k=5)
     assert [h.rank for h in hits] == [1, 2, 3, 4, 5]
-    assert all(h.child.topic == "bites" for h in hits[:2])
+    assert all(h.unit.topic == "bites" for h in hits[:2])
 
 
 def test_results_carry_parent_context_for_the_model(corpus: Corpus) -> None:
     hit = Retriever(corpus=corpus).retrieve("how do I do cpr", top_k=1)[0]
     assert hit.parent is not None
-    assert len(hit.context) >= len(hit.child.text)
+    assert len(hit.context) >= len(hit.unit.text)
 
 
 def test_oversized_parents_fall_back_to_the_child(corpus: Corpus) -> None:
     """A single huge section must never blow the prompt budget."""
     config = RetrievalConfig(max_parent_tokens=1)
     for hit in Retriever(corpus=corpus, config=config).retrieve("flood", top_k=3):
-        assert hit.context == hit.child.text
+        assert hit.context == hit.unit.text
 
 
 def test_mmr_reduces_duplicate_prohibitions(corpus: Corpus) -> None:
@@ -118,8 +118,8 @@ def test_mmr_reduces_duplicate_prohibitions(corpus: Corpus) -> None:
     diverse = Retriever(corpus=corpus, config=RetrievalConfig(mmr_lambda=0.6))
     plain = Retriever(corpus=corpus, config=RetrievalConfig(mmr_lambda=1.0))
     query = "snake bite what should I not do"
-    n_diverse = sum(1 for h in diverse.retrieve(query, top_k=5) if h.child.is_prohibition)
-    n_plain = sum(1 for h in plain.retrieve(query, top_k=5) if h.child.is_prohibition)
+    n_diverse = sum(1 for h in diverse.retrieve(query, top_k=5) if h.unit.is_prohibition)
+    n_plain = sum(1 for h in plain.retrieve(query, top_k=5) if h.unit.is_prohibition)
     assert n_diverse <= n_plain
 
 

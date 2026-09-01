@@ -14,7 +14,12 @@ in-app citations survive edits elsewhere in the file.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:  # pragma: no cover - import cycle guard
+    from .passages import Passage
+
+CHILD, PASSAGE, PARENT = "child", "passage", "parent"
 
 
 @dataclass(frozen=True, slots=True)
@@ -80,6 +85,13 @@ class ParentChunk:
     line_end: int
     token_estimate: int
     child_ids: tuple[str, ...] = ()
+    block_kind: str = "parent"
+    is_prohibition: bool = False
+
+    @property
+    def chunk_id(self) -> str:
+        """Alias so a parent is interchangeable with a child downstream."""
+        return self.parent_id
 
     def to_json(self) -> dict[str, Any]:
         """Serialise to a plain dict for the shipped index artifact."""
@@ -98,20 +110,31 @@ class ParentChunk:
 
 @dataclass(slots=True)
 class Corpus:
-    """The full chunked corpus, indexed for O(1) lookup by id."""
+    """The full chunked corpus at three granularities, indexed for lookup.
+
+    ``children`` are citation targets, ``passages`` are the retrieval view
+    (see :mod:`survive_rag.corpus.passages`), and ``parents`` are what the
+    model reads. Lookup by id works across all three, so the eval can score
+    any granularity against the same span-resolved labels.
+    """
 
     children: list[ChildChunk] = field(default_factory=list)
     parents: list[ParentChunk] = field(default_factory=list)
+    passages: list[Passage] = field(default_factory=list)
     _by_child: dict[str, ChildChunk] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
     _by_parent: dict[str, ParentChunk] = field(
         default_factory=dict, init=False, repr=False, compare=False
     )
+    _by_passage: dict[str, Passage] = field(
+        default_factory=dict, init=False, repr=False, compare=False
+    )
 
     def __post_init__(self) -> None:
         self._by_child = {c.chunk_id: c for c in self.children}
         self._by_parent = {p.parent_id: p for p in self.parents}
+        self._by_passage = {p.passage_id: p for p in self.passages}
 
     def child(self, chunk_id: str) -> ChildChunk | None:
         """Return the child with ``chunk_id``, or None."""
@@ -121,14 +144,58 @@ class Corpus:
         """Return the parent with ``parent_id``, or None."""
         return self._by_parent.get(parent_id)
 
+    def passage(self, passage_id: str) -> Passage | None:
+        """Return the passage with ``passage_id``, or None."""
+        return self._by_passage.get(passage_id)
+
     def parent_of(self, chunk_id: str) -> ParentChunk | None:
-        """Return the parent enclosing ``chunk_id``, or None."""
-        child = self.child(chunk_id)
-        return self._by_parent.get(child.parent_id) if child else None
+        """Return the parent enclosing any unit id, or None."""
+        unit = self.unit(chunk_id)
+        pid = getattr(unit, "parent_id", None) if unit else None
+        return self._by_parent.get(pid) if pid else None
+
+    def unit(self, unit_id: str) -> ChildChunk | Passage | ParentChunk | None:
+        """Look an id up at whichever granularity owns it.
+
+        Ids are disjoint across the three views, so one accessor serves all
+        of them and callers never need to know which view produced a result.
+        """
+        return (
+            self._by_child.get(unit_id)
+            or self._by_passage.get(unit_id)
+            or self._by_parent.get(unit_id)
+        )
+
+    def units(self, granularity: str) -> list[ChildChunk | Passage | ParentChunk]:
+        """Return every unit at ``granularity``: child, passage, or parent.
+
+        Raises:
+            ValueError: If ``granularity`` is not one of the three views.
+        """
+        if granularity == CHILD:
+            return list(self.children)
+        if granularity == PASSAGE:
+            return list(self.passages) if self.passages else list(self.children)
+        if granularity == PARENT:
+            return list(self.parents)
+        raise ValueError(f"unknown granularity {granularity!r}")
+
+    def citation_for(self, unit_id: str) -> str | None:
+        """Map any retrieved unit back to the child a citation should link to.
+
+        A passage cites its first child and a parent cites its first child,
+        because the user must land on a paragraph, never on a whole section.
+        """
+        if unit_id in self._by_child:
+            return unit_id
+        unit = self.unit(unit_id)
+        kids = getattr(unit, "child_ids", ()) if unit else ()
+        return kids[0] if kids else None
 
     def topics(self) -> list[str]:
-        """Return the sorted set of topic keys present in the corpus."""
+        """Every topic key present in the corpus, sorted."""
         return sorted({c.topic for c in self.children})
 
     def __len__(self) -> int:
+        """Number of children -- the corpus size quoted in reports."""
         return len(self.children)

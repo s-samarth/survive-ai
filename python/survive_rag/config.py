@@ -7,10 +7,12 @@ pipeline reads a tunable value from anywhere else.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, replace
+from dataclasses import asdict, dataclass, field, replace
 from typing import Any
 
 from .corpus.chunker import ChunkConfig
+from .corpus.models import CHILD
+from .corpus.passages import PassageConfig
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,9 +22,16 @@ class RetrievalConfig:
     Attributes:
         name: Identifier used as the row label in eval reports.
         chunking: Chunk sizing policy the corpus was built with.
+        passages: Retrieval-window sizing for the ``passage`` granularity.
+        granularity: Which view retrieval scores -- ``child`` (citation-sized),
+            ``passage`` (overlapping windows), or ``parent`` (whole sections).
+            Results are always mapped back to a child for the citation.
         use_literal_leg: Score the raw query terms.
         use_expanded_leg: Score the synonym/Hinglish-expanded query.
-        use_dense_leg: Reserved for the future embedding leg.
+        use_dense_leg: Score cosine similarity against unit embeddings.
+        embed_model: Key into :data:`survive_rag.retrieval.embedder.MODELS`.
+        embed_backend: ``torch`` in the lab, ``onnx`` for shipping parity.
+        embed_dim: Matryoshka truncation width; None keeps the native width.
         max_expansions: Cap on added expansion terms.
         leg_limit: Candidates each leg contributes to fusion.
         rrf_k: RRF damping constant.
@@ -44,10 +53,15 @@ class RetrievalConfig:
     """
 
     name: str = "baseline"
-    chunking: ChunkConfig = ChunkConfig()
+    chunking: ChunkConfig = field(default_factory=ChunkConfig)
+    passages: PassageConfig = field(default_factory=PassageConfig)
+    granularity: str = CHILD
     use_literal_leg: bool = True
     use_expanded_leg: bool = True
     use_dense_leg: bool = False
+    embed_model: str = "e5-small"
+    embed_backend: str = "torch"
+    embed_dim: int | None = None
     max_expansions: int = 10
     leg_limit: int = 50
     rrf_k: int = 60
@@ -71,4 +85,10 @@ class RetrievalConfig:
         """Serialise for inclusion in the eval report."""
         payload = asdict(self)
         payload["chunking"] = asdict(self.chunking)
+        payload["passages"] = asdict(self.passages)
         return payload
+
+    @property
+    def corpus_key(self) -> tuple[Any, ...]:
+        """Identity of the corpus this config needs, for build caching."""
+        return (self.chunking, self.passages)

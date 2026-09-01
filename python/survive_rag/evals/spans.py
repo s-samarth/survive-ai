@@ -7,8 +7,9 @@ interesting sweep (does chunking matter?) impossible to run.
 
 The fix: resolve each label once, against a **reference** corpus, down to the
 markdown source lines it covers. Matching afterwards is by line overlap, so
-any chunking policy can be scored against the same labels. Under the reference
-policy this reduces exactly to id equality.
+any chunking policy *and any granularity* can be scored against the same
+labels -- a passage that contains the gold child is credited for it. Under the
+reference policy at child granularity this reduces exactly to id equality.
 """
 
 from __future__ import annotations
@@ -49,7 +50,7 @@ def _spans_for(chunk_ids: tuple[str, ...], corpus: Corpus) -> tuple[Span, ...]:
     """Resolve chunk ids to source spans, skipping ids not in ``corpus``."""
     out = []
     for chunk_id in chunk_ids:
-        chunk = corpus.child(chunk_id)
+        chunk = corpus.unit(chunk_id)
         if chunk is not None:
             out.append(Span(chunk.topic, chunk.line_start, chunk.line_end))
     return tuple(out)
@@ -71,7 +72,7 @@ class CaseMatcher:
 
     def _span_of(self, chunk_id: str) -> Span | None:
         """Source span of a retrieved chunk, or None if it is unknown."""
-        chunk = self.corpus.child(chunk_id)
+        chunk = self.corpus.unit(chunk_id)
         if chunk is None:
             return None
         return Span(chunk.topic, chunk.line_start, chunk.line_end)
