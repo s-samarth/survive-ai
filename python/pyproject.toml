@@ -1,0 +1,22 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "survive-rag"
+version = "0.1.0"
+description = "Offline RAG lab and eval harness for the Survive AI India corpus"
+requires-python = ">=3.11"
+dependencies = []          # intentionally zero third-party deps
+
+[project.optional-dependencies]
+dense = ["numpy>=1.26", "model2vec>=0.4"]   # only for the future dense leg
+
+[project.scripts]
+survive-rag = "survive_rag.cli:main"
+
+[tool.setuptools.packages.find]
+include = ["survive_rag*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

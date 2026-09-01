@@ -54,3 +54,40 @@ jobs:
           name: survive-ai-release-apk
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
+
+  retrieval-eval:
+    name: Retrieval eval
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: python
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      # survive_rag itself has no third-party dependencies; these are dev only.
+      - name: Install dev tools
+        run: pip install pytest ruff
+
+      - name: Lint
+        run: ruff check survive_rag tests --line-length 100
+
+      - name: Unit tests
+        run: python -m pytest tests -q
+
+      # Fails the build if a guide edit invalidated a hand-authored label,
+      # which would otherwise silently depress every score.
+      - name: Validate golden set
+        run: python -m survive_rag validate
+
+      - name: Retrieval eval
+        run: python -m survive_rag eval --html reports/eval.html
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: retrieval-eval-report
+          path: python/reports/eval.html
