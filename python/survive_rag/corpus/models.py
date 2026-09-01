@@ -167,11 +167,7 @@ class Corpus:
         )
 
     def units(self, granularity: str) -> list[ChildChunk | Passage | ParentChunk]:
-        """Return every unit at ``granularity``: child, passage, or parent.
-
-        Raises:
-            ValueError: If ``granularity`` is not one of the three views.
-        """
+        """Every unit at ``granularity``; raises ValueError on an unknown view."""
         if granularity == CHILD:
             return list(self.children)
         if granularity == PASSAGE:

@@ -162,17 +162,10 @@ class Retriever:
         selected = mmr_select(scored, k=k, lambda_=cfg.mmr_lambda)
         return self._results(selected, [by_id[u.chunk_id] for u in selected], query)
 
-    def _results(
-        self, units: list, scores: list[float], query: str
-    ) -> list[RetrievedChunk]:
+    def _results(self, units: list, scores: list[float], q: str) -> list[RetrievedChunk]:
         """Assemble results with context, citation and rank."""
         return materialise(
-            units,
-            scores,
-            query,
-            corpus=self.corpus,
-            config=self.config,
-            picker=self._picker,
+            units, scores, q, corpus=self.corpus, config=self.config, picker=self._picker
         )
 
     def retrieve_ids(self, query: str, *, top_k: int | None = None) -> list[str]:
@@ -182,11 +175,9 @@ class Retriever:
     def retrieve_citations(self, query: str, *, top_k: int | None = None) -> list[str]:
         """Ranked child ids -- what a user actually clicks.
 
-        Scored separately from :meth:`retrieve_ids` because a coarse unit wins
-        span-overlap recall trivially (it contains more lines), while still
-        having to pick the right child out of several to cite correctly.
-        Comparing granularities on unit recall alone would flatter the coarse
-        ones; this is the apples-to-apples number.
+        Scored separately from :meth:`retrieve_ids`: a coarse unit wins
+        span-overlap recall trivially by covering more lines, while still
+        having to pick the right child to cite. This is the fair comparison.
         """
         k = top_k or self.config.top_k
         return self.citations_for(self.retrieve(query, top_k=k), query, limit=k)
