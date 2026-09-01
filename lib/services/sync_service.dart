@@ -8,14 +8,25 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import '../models/doc_manifest.dart';
+import '../models/doc_topic.dart';
 import '../models/doc_chunk.dart';
 import 'database_service.dart';
 import 'chunker_service.dart';
 import 'embedding_service.dart';
 
-// Replace with your actual GitHub raw manifest URL once the docs repo is created.
-const _manifestUrl =
-    'https://raw.githubusercontent.com/survive-ai/survive-ai-docs/main/manifest.json';
+/// Where the content manifest lives.
+///
+/// Override at build time so a fork or a staging channel needs no code change:
+///   flutter build apk --dart-define=SURVIVE_AI_MANIFEST_URL=https://.../manifest.json
+///
+/// The default points at this project's docs repo. If it is unreachable the app
+/// is fully functional on its bundled corpus — sync is an enhancement, never a
+/// dependency.
+const kManifestUrl = String.fromEnvironment(
+  'SURVIVE_AI_MANIFEST_URL',
+  defaultValue:
+      'https://raw.githubusercontent.com/samarthsaraswat/survive-ai-docs/main/manifest.json',
+);
 
 /// Handles WiFi-gated syncing of survival docs and model metadata from GitHub.
 ///
@@ -33,48 +44,41 @@ class SyncService {
 
   SyncService(this._db, this._chunker, this._embedder);
 
-  /// Seeds the database with bundled assets if they haven't been loaded yet.
-  /// Ensures the app has expert knowledge immediately after install (Zero-Wait RAG).
+  /// Version stamp for the bundled corpus. Bump this whenever the shipped
+  /// Markdown changes so existing installs re-ingest on next launch instead of
+  /// silently keeping stale chunks.
+  static const bundledVersion = 'bundled-2.0-in';
+
+  /// Seeds the database with the bundled India guides if they are not already
+  /// ingested at [bundledVersion].
+  ///
+  /// Safe and cheap to call on every launch: topics already at the current
+  /// version are skipped with a single indexed lookup, so the steady-state cost
+  /// is one SELECT per topic. It **must** run on every launch — gating it
+  /// behind the model download meant a sideloaded or pre-existing model left
+  /// the corpus permanently empty.
   Future<void> seedFromAssets() async {
-    final assets = {
-      'docs/survival_guides/war.md': 'war',
-      'docs/survival_guides/medical.md': 'medical',
-      'docs/survival_guides/jungle.md': 'jungle',
-      'docs/survival_guides/desert.md': 'desert',
-      'docs/survival_guides/urban.md': 'urban',
-      'docs/survival_guides/general.md': 'general',
-    };
-
-    for (final entry in assets.entries) {
-      final path = entry.key;
-      final topic = entry.value;
-      final id = '${p.basenameWithoutExtension(path)}_$topic';
-
-      // Check if already in DB
-      final existingVersion = await _db.getDocVersion(id);
-      if (existingVersion == 'bundled-1.0') continue;
+    for (final topic in DocTopic.values) {
+      if (await _db.getDocVersion(topic.docId) == bundledVersion) continue;
 
       try {
-        final content = await rootBundle.loadString(path);
+        final content = await rootBundle.loadString(topic.assetPath);
 
-        await _db.deleteChunksForDoc(id);
-        final chunks = _chunker.chunk(content, id, topic);
+        await _db.deleteChunksForDoc(topic.docId);
+        final chunks = _chunker.chunk(content, topic.docId, topic.key);
         await _db.insertChunks(chunks);
         await _db.upsertDoc({
-          'id': id,
-          'filename': p.basename(path),
-          'topic': topic,
-          'version': 'bundled-1.0',
-          'checksum': '', // Maintain schema constraint but avoid actual hashing
+          'id': topic.docId,
+          'filename': p.basename(topic.assetPath),
+          'topic': topic.key,
+          'version': bundledVersion,
+          'checksum': '', // Bundled assets are trusted; no hash needed.
           'last_synced': DateTime.now().millisecondsSinceEpoch,
         });
 
-        // Compute semantic embeddings for the newly inserted chunks.
-        // EmbeddingService loads and disposes TFLite within this call — safe
-        // to run before Gemma is loaded.
         await _embedChunks(chunks);
       } catch (e) {
-        debugPrint('Error seeding asset $path: $e');
+        debugPrint('Error seeding bundled guide ${topic.assetPath}: $e');
       }
     }
   }
@@ -93,7 +97,9 @@ class SyncService {
       final manifest = await _fetchManifest();
       final prefs = await SharedPreferences.getInstance();
       final localVersion = prefs.getString('manifest_version') ?? '';
-      return manifest.version != localVersion ? SyncStatus.updatesAvailable : SyncStatus.upToDate;
+      return manifest.version != localVersion
+          ? SyncStatus.updatesAvailable
+          : SyncStatus.upToDate;
     } catch (_) {
       return SyncStatus.error;
     }
@@ -102,8 +108,12 @@ class SyncService {
   /// Full sync: fetch manifest, download changed docs, re-index, re-embed.
   ///
   /// [onProgress] — called with (downloaded, total) doc counts.
-  Future<SyncResult> syncNow({void Function(int done, int total)? onProgress}) async {
-    if (!await isOnline()) return SyncResult(status: SyncStatus.offline, updatedDocs: 0);
+  Future<SyncResult> syncNow({
+    void Function(int done, int total)? onProgress,
+  }) async {
+    if (!await isOnline()) {
+      return SyncResult(status: SyncStatus.offline, updatedDocs: 0);
+    }
 
     try {
       final manifest = await _fetchManifest();
@@ -154,7 +164,11 @@ class SyncService {
 
       return SyncResult(status: SyncStatus.upToDate, updatedDocs: updated);
     } catch (e) {
-      return SyncResult(status: SyncStatus.error, updatedDocs: 0, error: e.toString());
+      return SyncResult(
+        status: SyncStatus.error,
+        updatedDocs: 0,
+        error: e.toString(),
+      );
     }
   }
 
@@ -186,15 +200,33 @@ class SyncService {
     }
   }
 
+  /// Fetch the model entry from the manifest, or null when offline or the
+  /// manifest is unreachable. Callers fall back to their compiled-in defaults.
+  Future<ModelInfo?> fetchModelInfo() async {
+    if (!await isOnline()) return null;
+    try {
+      return (await _fetchManifest()).model;
+    } catch (e) {
+      debugPrint('Could not fetch model info from manifest: $e');
+      return null;
+    }
+  }
+
   Future<DocManifest> _fetchManifest() async {
-    final response = await http.get(Uri.parse(_manifestUrl));
-    if (response.statusCode != 200) throw Exception('Failed to fetch manifest: ${response.statusCode}');
-    return DocManifest.fromJson(jsonDecode(response.body) as Map<String, dynamic>);
+    final response = await http.get(Uri.parse(kManifestUrl));
+    if (response.statusCode != 200) {
+      throw Exception('Failed to fetch manifest: ${response.statusCode}');
+    }
+    return DocManifest.fromJson(
+      jsonDecode(response.body) as Map<String, dynamic>,
+    );
   }
 
   Future<String> _downloadDoc(String url) async {
     final response = await http.get(Uri.parse(url));
-    if (response.statusCode != 200) throw Exception('Failed to download doc: $url');
+    if (response.statusCode != 200) {
+      throw Exception('Failed to download doc: $url');
+    }
     return response.body;
   }
 
@@ -213,5 +245,9 @@ class SyncResult {
   final int updatedDocs;
   final String? error;
 
-  const SyncResult({required this.status, required this.updatedDocs, this.error});
+  const SyncResult({
+    required this.status,
+    required this.updatedDocs,
+    this.error,
+  });
 }

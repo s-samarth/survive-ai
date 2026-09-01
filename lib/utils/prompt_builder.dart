@@ -1,4 +1,5 @@
 import '../models/chat_message.dart';
+import '../services/llm_service.dart';
 import '../models/doc_chunk.dart';
 
 /// Builds the prompt string for on-device Gemma 2B inference.
@@ -16,10 +17,11 @@ import '../models/doc_chunk.dart';
 /// starts generating. This prevents the "forgotten instructions" problem
 /// where a 260-token system prompt at the top gets ignored.
 ///
-/// Token budget: 4096 context − 512 max output − 84 safety = 3500 prompt tokens.
+/// Token budget is derived from [kMaxPromptTokens] so it can never drift out of
+/// sync with the context window actually configured on the model.
 class PromptBuilder {
-  /// Max prompt tokens: context (4096) − max output (512) − safety (84).
-  static const int _maxPromptTokens = 3500;
+  /// Max prompt tokens, derived from the model's configured context window.
+  static const int _maxPromptTokens = kMaxPromptTokens;
 
   /// Short instruction placed RIGHT BEFORE the question (~60 tokens).
   ///
@@ -33,9 +35,13 @@ class PromptBuilder {
       'If the user message is a greeting respond by telling about you and how you can help. '
       'Give the most critical action FIRST, then supporting steps. '
       'Be specific with distances, times, and quantities. '
-      'Never say "call emergency services" — the user may have no access. '
-      'Do not add filler phrases.'
-      'Take the users request very seriously do not tell them that this is just a warning or this is something which is not serious';
+      'Assume there is no network and no ambulance coming: give steps the user '
+      'can do themselves right now. Mention 112 only as a second line, never as '
+      'the whole answer. '
+      'Do not add filler phrases. '
+      'Take the user\'s request very seriously — never tell them it is only a warning or not serious. '
+      'The user is in India: prefer Indian emergency numbers (112), Indian names for '
+      'things, and advice that works with what an Indian household actually has.';
 
   /// Build the complete prompt for a RAG-augmented chat turn.
   ///
@@ -88,7 +94,8 @@ class PromptBuilder {
     // 3. Instruction — RIGHT BEFORE the question (where 2B model attends most)
     if (context.isNotEmpty) {
       buffer.writeln(
-          '$_instruction Use the reference information above to answer.');
+        '$_instruction Use the reference information above to answer.',
+      );
     } else {
       buffer.writeln(_instruction);
     }
@@ -106,8 +113,9 @@ class PromptBuilder {
   /// User:/Assistant: to avoid role confusion when the entire prompt
   /// is inside a single `<start_of_turn>user` block.
   static String _buildHistory(List<ChatMessage> history, int maxTokens) {
-    final recent =
-        history.length > 4 ? history.sublist(history.length - 4) : history;
+    final recent = history.length > 4
+        ? history.sublist(history.length - 4)
+        : history;
 
     final lines = <String>[];
     var tokens = 5; // header
@@ -132,20 +140,25 @@ class PromptBuilder {
 
   /// Build the reference material block from retrieved chunks.
   ///
-  /// Each chunk is capped at 1000 characters (~250 tokens) to leave room
-  /// for instruction + question near the end of the prompt.
+  /// Each chunk is capped at [_maxChunkChars] to leave room for the
+  /// instruction + question near the end of the prompt. Four chunks at the
+  /// old 1000-char cap alone exceeded the real context window.
+  static const int _maxChunkChars = 700;
+
   static String _buildContext(List<DocChunk> chunks) {
     if (chunks.isEmpty) return '';
-    return chunks.map((c) {
-      final source = c.headingPath.isNotEmpty
-          ? '${c.topic} > ${c.headingPath}'
-          : c.topic;
-      var body = c.body;
-      if (body.length > 1000) {
-        body = '${body.substring(0, 997)}...';
-      }
-      return '[$source]\n$body';
-    }).join('\n\n');
+    return chunks
+        .map((c) {
+          final source = c.headingPath.isNotEmpty
+              ? '${c.topic} > ${c.headingPath}'
+              : c.topic;
+          var body = c.body;
+          if (body.length > _maxChunkChars) {
+            body = '${body.substring(0, _maxChunkChars - 3)}...';
+          }
+          return '[$source]\n$body';
+        })
+        .join('\n\n');
   }
 
   /// Rough token estimate: words × 1.3 (same heuristic as ChunkerService).

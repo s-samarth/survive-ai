@@ -32,8 +32,8 @@ class DisclaimerScreen extends StatelessWidget {
               Text(
                 'Survive AI',
                 style: Theme.of(context).textTheme.headlineLarge?.copyWith(
-                      fontWeight: FontWeight.bold,
-                    ),
+                  fontWeight: FontWeight.bold,
+                ),
               ),
               const SizedBox(height: 24),
               Text(

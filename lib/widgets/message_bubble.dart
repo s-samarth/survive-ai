@@ -26,7 +26,9 @@ class MessageBubble extends StatelessWidget {
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
 
-    final bgColor = _isUser ? colorScheme.primary : colorScheme.surfaceContainerHighest;
+    final bgColor = _isUser
+        ? colorScheme.primary
+        : colorScheme.surfaceContainerHighest;
     final textColor = _isUser ? colorScheme.onPrimary : colorScheme.onSurface;
 
     final showTypingIndicator = isStreaming && message.content.isEmpty;

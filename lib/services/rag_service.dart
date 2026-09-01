@@ -60,15 +60,17 @@ class RagService {
           )
         : Future.value(<String>[]);
 
-    // Leg 3: Dense embedding retrieval (when embeddings are computed)
-    final queryVec = await _embedder.embedQuery(query);
+    // Leg 3: Dense embedding retrieval. Skipped entirely while the embedding
+    // backend is disabled — no vector allocated, no similarity scan.
+    final denseIds = _embedder.isEnabled
+        ? await _denseRetrieve(
+            await _embedder.embedQuery(query),
+            topicFilter: topicFilter,
+          )
+        : const <String>[];
 
     final bm25Ids = await bm25Future;
     final semanticIds = await semanticFuture;
-    final denseIds = await _denseRetrieveWithVector(
-      queryVec,
-      topicFilter: topicFilter,
-    );
 
     // 3-way RRF merge
     final topIds = _rrfMerge(
@@ -77,61 +79,6 @@ class RagService {
     );
 
     return _db.getChunksByIds(topIds);
-  }
-
-  /// Retrieve chunks relevant to multiple topics simultaneously.
-  ///
-  /// Embeds the query once, then runs all three retrieval legs per topic
-  /// and merges results with deduplication. The query vector is reused
-  /// across topics to avoid repeated embedding computation.
-  Future<List<DocChunk>> retrieveForSituation(
-    String query,
-    List<String> topics, {
-    int topK = 6,
-  }) async {
-    final queryVec = await _embedder.embedQuery(query);
-    final expandedQuery = QueryExpander.expand(query);
-
-    final scores = <String, double>{};
-
-    for (final topic in topics) {
-      final perTopicK = topK ~/ topics.length + 1;
-
-      final bm25Ids = await _db.searchFts(
-        query,
-        topicFilter: topic,
-        limit: _candidateLimit,
-      );
-
-      final semanticIds = expandedQuery != query
-          ? await _db.searchFts(
-              expandedQuery,
-              topicFilter: topic,
-              limit: _candidateLimit,
-            )
-          : <String>[];
-
-      final denseIds = await _denseRetrieveWithVector(
-        queryVec,
-        topicFilter: topic,
-      );
-
-      // Accumulate RRF scores across topics (cross-topic re-ranking)
-      final topicMerge = _rrfMerge(
-        rankedLists: [bm25Ids, semanticIds, denseIds],
-        topK: perTopicK,
-      );
-
-      for (var rank = 0; rank < topicMerge.length; rank++) {
-        final id = topicMerge[rank];
-        scores[id] = (scores[id] ?? 0.0) + 1.0 / (rank + 1 + _rrfK);
-      }
-    }
-
-    final sortedIds = scores.keys.toList()
-      ..sort((a, b) => scores[b]!.compareTo(scores[a]!));
-
-    return _db.getChunksByIds(sortedIds.take(topK).toList());
   }
 
   // ---------------------------------------------------------------------------
@@ -143,12 +90,12 @@ class RagService {
   /// The corpus is at most ~300 chunks — O(300 × dims) is sub-millisecond on
   /// ARM. No approximate nearest-neighbour index is needed.
   ///
-  /// Returns empty list if no embeddings have been computed yet.
-  Future<List<String>> _denseRetrieveWithVector(
+  /// Returns an empty list if no embeddings have been computed yet.
+  Future<List<String>> _denseRetrieve(
     Float32List queryVec, {
     String? topicFilter,
   }) async {
-    if (!EmbeddingService.isComputed(queryVec)) return [];
+    if (queryVec.isEmpty) return const [];
 
     final allEmbeddings = await _db.getAllEmbeddings(topicFilter: topicFilter);
     if (allEmbeddings.isEmpty) return [];
@@ -156,8 +103,7 @@ class RagService {
     final scored = allEmbeddings.map((entry) {
       final (id, vec) = entry;
       return (id, EmbeddingService.cosine(queryVec, vec));
-    }).toList()
-      ..sort((a, b) => b.$2.compareTo(a.$2));
+    }).toList()..sort((a, b) => b.$2.compareTo(a.$2));
 
     return scored.take(_candidateLimit).map((e) => e.$1).toList();
   }

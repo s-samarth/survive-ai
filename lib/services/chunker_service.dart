@@ -15,10 +15,7 @@ class ChunkerService {
   final int maxTokens;
   final int overlapTokens;
 
-  const ChunkerService({
-    this.maxTokens = 300,
-    this.overlapTokens = 50,
-  });
+  const ChunkerService({this.maxTokens = 300, this.overlapTokens = 50});
 
   List<DocChunk> chunk(String markdown, String docId, String topic) {
     final sections = _splitAtHeadings(markdown);
@@ -37,13 +34,15 @@ class ChunkerService {
 
         if (windowTokens + paraTokens > maxTokens && window.isNotEmpty) {
           // Emit current window as a chunk
-          chunks.add(_makeChunk(
-            docId: docId,
-            topic: topic,
-            headingPath: headingPath,
-            body: window.join('\n\n'),
-            index: chunkIndex++,
-          ));
+          chunks.add(
+            _makeChunk(
+              docId: docId,
+              topic: topic,
+              headingPath: headingPath,
+              body: window.join('\n\n'),
+              index: chunkIndex++,
+            ),
+          );
 
           // Overlap: keep last [overlapTokens] worth of content
           _applyOverlap(window, overlapTokens);
@@ -55,13 +54,15 @@ class ChunkerService {
       }
 
       if (window.isNotEmpty) {
-        chunks.add(_makeChunk(
-          docId: docId,
-          topic: topic,
-          headingPath: headingPath,
-          body: window.join('\n\n'),
-          index: chunkIndex++,
-        ));
+        chunks.add(
+          _makeChunk(
+            docId: docId,
+            topic: topic,
+            headingPath: headingPath,
+            body: window.join('\n\n'),
+            index: chunkIndex++,
+          ),
+        );
       }
     }
 
@@ -74,15 +75,14 @@ class ChunkerService {
     required String headingPath,
     required String body,
     required int index,
-  }) =>
-      DocChunk(
-        id: _uuid.v4(),
-        docId: docId,
-        topic: topic,
-        headingPath: headingPath,
-        body: body.trim(),
-        chunkIndex: index,
-      );
+  }) => DocChunk(
+    id: _uuid.v4(),
+    docId: docId,
+    topic: topic,
+    headingPath: headingPath,
+    body: body.trim(),
+    chunkIndex: index,
+  );
 
   List<_Section> _splitAtHeadings(String markdown) {
     final sections = <_Section>[];
@@ -95,17 +95,20 @@ class ChunkerService {
 
     // Text before the first heading
     if (matches.first.start > 0) {
-      sections.add(_Section(
-        heading: '',
-        body: markdown.substring(0, matches.first.start),
-      ));
+      sections.add(
+        _Section(heading: '', body: markdown.substring(0, matches.first.start)),
+      );
     }
 
     for (var i = 0; i < matches.length; i++) {
       final heading = matches[i].group(1)!.trim();
       final start = matches[i].end;
-      final end = i + 1 < matches.length ? matches[i + 1].start : markdown.length;
-      sections.add(_Section(heading: heading, body: markdown.substring(start, end)));
+      final end = i + 1 < matches.length
+          ? matches[i + 1].start
+          : markdown.length;
+      sections.add(
+        _Section(heading: heading, body: markdown.substring(start, end)),
+      );
     }
 
     return sections;
@@ -128,7 +131,8 @@ class ChunkerService {
   }
 
   /// Rough token estimate: words × 1.3
-  int _estimateTokens(String text) => (text.split(RegExp(r'\s+')).length * 1.3).ceil();
+  int _estimateTokens(String text) =>
+      (text.split(RegExp(r'\s+')).length * 1.3).ceil();
 }
 
 class _Section {

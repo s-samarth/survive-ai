@@ -75,8 +75,11 @@ class _SyncStatusBannerState extends ConsumerState<SyncStatusBanner> {
       padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       child: Row(
         children: [
-          Icon(Icons.cloud_download_outlined,
-              size: 16, color: Theme.of(context).colorScheme.onPrimaryContainer),
+          Icon(
+            Icons.cloud_download_outlined,
+            size: 16,
+            color: Theme.of(context).colorScheme.onPrimaryContainer,
+          ),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -88,10 +91,7 @@ class _SyncStatusBannerState extends ConsumerState<SyncStatusBanner> {
             ),
           ),
           if (!_syncing)
-            TextButton(
-              onPressed: _syncNow,
-              child: const Text('Sync'),
-            )
+            TextButton(onPressed: _syncNow, child: const Text('Sync'))
           else
             const SizedBox(
               width: 16,

@@ -6,10 +6,16 @@
     <!-- Needed on Android < 10 to write model/docs to external storage -->
     <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
         android:maxSdkVersion="28" />
+    <!-- largeHeap: the model weights and KV cache are native allocations, but
+         the Dart heap still grows during corpus ingestion and token streaming.
+         This raises the Dalvik cap so the app is not killed on 4-6 GB devices
+         that apply a conservative default. -->
     <application
         android:label="Survive AI"
         android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
+        android:icon="@mipmap/ic_launcher"
+        android:largeHeap="true"
+        android:hardwareAccelerated="true">
         <activity
             android:name=".MainActivity"
             android:exported="true"

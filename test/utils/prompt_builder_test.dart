@@ -61,11 +61,14 @@ void main() {
     });
 
     test('trims history to last 4 turns', () {
-      final history = List.generate(10, (i) => ChatMessage(
-        role: i.isEven ? 'user' : 'assistant',
-        content: 'Message $i',
-        timestamp: DateTime.now(),
-      ));
+      final history = List.generate(
+        10,
+        (i) => ChatMessage(
+          role: i.isEven ? 'user' : 'assistant',
+          content: 'Message $i',
+          timestamp: DateTime.now(),
+        ),
+      );
 
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],

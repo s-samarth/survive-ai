@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/providers.dart';
+import '../services/llm_service.dart';
 
 /// Displays storage info, sync status, and app configuration.
 class SettingsScreen extends ConsumerStatefulWidget {
@@ -34,18 +35,27 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     String lastSync = 'Never';
     if (lastSyncMs != null) {
       final dt = DateTime.fromMillisecondsSinceEpoch(lastSyncMs);
-      lastSync = '${dt.year}-${_pad(dt.month)}-${_pad(dt.day)} at ${_pad(dt.hour)}:${_pad(dt.minute)}';
+      lastSync =
+          '${dt.year}-${_pad(dt.month)}-${_pad(dt.day)} at ${_pad(dt.hour)}:${_pad(dt.minute)}';
     }
 
     // Calculate storage
     final appDir = await getApplicationDocumentsDirectory();
-    final modelSize = await _fileSize('${appDir.path}/models/model.gguf');
+    // Look in both locations findModelFile checks: our managed models/
+    // subfolder and the app-docs root that flutter_gemma downloads into.
+    // The old hardcoded 'models/model.gguf' never matched anything, so
+    // storage always reported 0 MB for the model.
+    var modelSize = await _fileSize('${appDir.path}/models/$kModelName');
+    if (modelSize == 0) {
+      modelSize = await _fileSize('${appDir.path}/$kModelName');
+    }
     final docsSize = await _dirSize(Directory('${appDir.path}/docs'));
     final dbSize = await _fileSize('${appDir.path}/survive_ai.db');
     final totalMb = (modelSize + docsSize + dbSize) / (1024 * 1024);
 
     setState(() {
-      _storageInfo = '${totalMb.toStringAsFixed(0)} MB total '
+      _storageInfo =
+          '${totalMb.toStringAsFixed(0)} MB total '
           '(model: ${(modelSize / (1024 * 1024)).toStringAsFixed(0)} MB, '
           'docs: ${(docsSize / (1024 * 1024)).toStringAsFixed(1)} MB, '
           'DB: ${(dbSize / (1024 * 1024)).toStringAsFixed(1)} MB)';
@@ -156,7 +166,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           const ListTile(
             leading: Icon(Icons.memory),
             title: Text('AI Model'),
-            subtitle: Text('Gemma 3 1B (Q4_K_M)'),
+            subtitle: Text(
+              'Gemma 2B IT (INT4, CPU) · $kContextTokens-token context',
+            ),
           ),
         ],
       ),
@@ -175,8 +187,8 @@ class _SectionHeader extends StatelessWidget {
       child: Text(
         title,
         style: Theme.of(context).textTheme.labelLarge?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+        ),
       ),
     );
   }

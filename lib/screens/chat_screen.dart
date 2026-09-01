@@ -45,7 +45,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _controller.clear();
     setState(() {
-      _history.add(ChatMessage(role: 'user', content: text, timestamp: DateTime.now()));
+      _history.add(
+        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
+      );
       _isGenerating = true;
       _streamingBuffer = '';
     });
@@ -55,13 +57,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final rag = ref.read(ragServiceProvider);
       final llm = ref.read(llmServiceProvider);
 
-      // Skip RAG for very short/trivial queries (< 3 words).
-      // BM25 on "hi" or "yo" returns irrelevant chunks that confuse the
-      // 2B model into parroting random context instead of responding.
-      final words = text.trim().split(RegExp(r'\s+'));
-      final chunks = words.length >= 3
-          ? await rag.retrieve(text, topicFilter: widget.topicFilter)
-          : <DocChunk>[];
+      // Skip RAG only for pure greetings and acknowledgements. A word-count
+      // heuristic was wrong in the direction that matters: "chest pain",
+      // "snake bite" and "bleeding badly" are two words and are exactly the
+      // queries that most need retrieval.
+      final chunks = _isSmallTalk(text)
+          ? <DocChunk>[]
+          : await rag.retrieve(text, topicFilter: widget.topicFilter);
 
       // Pass only the history BEFORE the current user message.
       // Previously, the filter bug passed the current user message in BOTH
@@ -94,30 +96,83 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       _streamFlushTimer?.cancel();
       _streamFlushTimer = null;
 
+      if (!mounted) return;
       setState(() {
-        _history.add(ChatMessage(
-          role: 'assistant',
-          content: buffer.toString(),
-          timestamp: DateTime.now(),
-        ));
+        _history.add(
+          ChatMessage(
+            role: 'assistant',
+            content: buffer.toString(),
+            timestamp: DateTime.now(),
+          ),
+        );
         _streamingBuffer = '';
         _isGenerating = false;
       });
     } catch (e) {
       _streamFlushTimer?.cancel();
       _streamFlushTimer = null;
+      if (!mounted) return;
       setState(() {
-        _history.add(ChatMessage(
-          role: 'assistant',
-          content: 'Error: ${e.toString()}',
-          timestamp: DateTime.now(),
-        ));
+        _history.add(
+          ChatMessage(
+            role: 'assistant',
+            content: 'Error: ${e.toString()}',
+            timestamp: DateTime.now(),
+          ),
+        );
         _streamingBuffer = '';
         _isGenerating = false;
       });
     }
     _scrollToBottom();
   }
+
+  /// True for greetings and bare acknowledgements, where retrieval would only
+  /// inject irrelevant context for the model to parrot.
+  static bool _isSmallTalk(String text) {
+    final normalised = text
+        .toLowerCase()
+        .replaceAll(RegExp(r'[^a-z\s]'), '')
+        .trim();
+    return _smallTalk.contains(normalised);
+  }
+
+  static const _smallTalk = <String>{
+    'hi',
+    'hii',
+    'hello',
+    'hey',
+    'yo',
+    'namaste',
+    'namaskar',
+    'salaam',
+    'hi there',
+    'hello there',
+    'good morning',
+    'good evening',
+    'good afternoon',
+    'thanks',
+    'thank you',
+    'thank u',
+    'thx',
+    'ty',
+    'ok',
+    'okay',
+    'k',
+    'yes',
+    'no',
+    'yeah',
+    'yep',
+    'nope',
+    'haan',
+    'nahi',
+    'dhanyavaad',
+    'shukriya',
+    'bye',
+    'goodbye',
+    'test',
+    'testing',
+  };
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -229,9 +284,16 @@ class _InputBar extends StatelessWidget {
                 textInputAction: TextInputAction.send,
                 onSubmitted: (_) => onSend(),
                 decoration: InputDecoration(
-                  hintText: enabled ? 'Ask a survival question…' : 'Loading AI…',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(24)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                  hintText: enabled
+                      ? 'Ask a survival question…'
+                      : 'Loading AI…',
+                  border: OutlineInputBorder(
+                    borderRadius: BorderRadius.circular(24),
+                  ),
+                  contentPadding: const EdgeInsets.symmetric(
+                    horizontal: 16,
+                    vertical: 10,
+                  ),
                   isDense: true,
                 ),
               ),
