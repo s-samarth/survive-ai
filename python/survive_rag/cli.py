@@ -89,13 +89,25 @@ def cmd_query(args: argparse.Namespace) -> int:
 
 
 def cmd_validate(args: argparse.Namespace) -> int:
-    """Check the golden set against the live corpus."""
+    """Check both golden sets against the live corpus."""
+    from .evals.gen_cases import validate as validate_generation
+
     root = repo_root()
+    corpus = load_corpus()
     goldset = load_goldset(args.goldset or _goldset_path(root))
-    problems = validate(goldset, load_corpus())
-    print(f"{len(goldset)} cases, {len(problems)} problems")
+    problems = validate(goldset, corpus)
+    print(f"retrieval:  {len(goldset)} cases, {len(problems)} problems")
     for problem in problems:
         print(f"  {problem}")
+
+    genset_path = args.genset or _genset_path(root)
+    if genset_path.is_file():
+        genset = load_genset(genset_path)
+        gen_problems = validate_generation(genset, corpus.topics())
+        print(f"generation: {len(genset)} cases, {len(gen_problems)} problems")
+        for problem in gen_problems:
+            print(f"  {problem}")
+        problems = problems + gen_problems
     return 1 if problems else 0
 
 
@@ -148,6 +160,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     check = sub.add_parser("validate", help="check golden-set labels")
     check.add_argument("--goldset", type=Path)
+    check.add_argument("--genset", type=Path, help="generation golden set path")
     check.set_defaults(func=cmd_validate)
 
     evaluate = sub.add_parser("eval", help="run the retrieval eval")

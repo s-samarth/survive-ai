@@ -111,9 +111,13 @@ class HuggingFaceGenerator:
 
         self.name = self.name or self.spec.key
         device = self.device or ("mps" if torch.backends.mps.is_available() else "cpu")
+        # float16 on the GPU, float32 on CPU: fp16 halves the weights (a 1.5B
+        # model is 6 GB at fp32, which thrashes on a laptop) but CPU kernels
+        # for fp16 are slower than fp32, so the choice follows the device.
+        dtype = torch.float16 if device == "mps" else torch.float32
         tokenizer = AutoTokenizer.from_pretrained(self.spec.repo_id)
         model = AutoModelForCausalLM.from_pretrained(
-            self.spec.repo_id, dtype=torch.float32
+            self.spec.repo_id, dtype=dtype
         ).to(device)
         model.eval()
         self._pipe = (tokenizer, model, device)

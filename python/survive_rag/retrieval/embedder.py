@@ -40,6 +40,10 @@ class ModelSpec:
         doc_prefix: Text prepended to documents, if the model expects one.
         matryoshka: True when the vector may be truncated without retraining.
         multilingual: True when the model was trained beyond English.
+        pooling: How token vectors become a sentence vector. E5 and MiniLM
+            mean-pool; BGE reads the CLS token. Getting this wrong silently
+            produces plausible but much worse vectors.
+        onnx_file: Path of the exported graph inside the repository.
     """
 
     key: str
@@ -50,6 +54,8 @@ class ModelSpec:
     doc_prefix: str = ""
     matryoshka: bool = False
     multilingual: bool = False
+    pooling: str = "mean"
+    onnx_file: str = "onnx/model.onnx"
 
 
 MODELS: dict[str, ModelSpec] = {
@@ -65,6 +71,7 @@ MODELS: dict[str, ModelSpec] = {
         dim=384,
         params_m=33,
         query_prefix="Represent this sentence for searching relevant passages: ",
+        pooling="cls",
     ),
     "e5-small": ModelSpec(
         key="e5-small",
