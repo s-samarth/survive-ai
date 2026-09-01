@@ -81,12 +81,13 @@ def run_config(
     abstained = out_corpus = 0
     for matcher in matchers:
         case = matcher.case
-        ranked = retriever.retrieve_ids(case.query, top_k=EVAL_DEPTH)
+        hits = retriever.retrieve(case.query, top_k=EVAL_DEPTH)
+        ranked = [h.unit_id for h in hits]
         if case.is_out_of_corpus:
             out_corpus += 1
             abstained += 1 if not ranked else 0
             continue
-        results.append(evaluate_case(ranked, matcher))
+        results.append(evaluate_case(ranked, matcher, [h.citation for h in hits]))
 
     by_slice: dict[str, dict[str, float]] = {}
     for name in goldset.slice_names():

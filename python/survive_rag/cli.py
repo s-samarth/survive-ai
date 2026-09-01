@@ -9,6 +9,9 @@ from pathlib import Path
 
 from .config import RetrievalConfig
 from .corpus.loader import export_index, load_corpus, repo_root
+from .evals.gen_cases import load_genset
+from .evals.gen_report import render as render_generation
+from .evals.gen_runner import run_generation
 from .evals.goldset import load_goldset, validate
 from .evals.report import full_text_report, gate_status
 from .evals.report_html import write_html_report
@@ -18,8 +21,44 @@ from .sweeps import BASELINE, SWEEPS
 
 
 def _goldset_path(root: Path) -> Path:
-    """Default location of the golden set."""
+    """Default location of the retrieval golden set."""
     return root / "python" / "goldset" / "retrieval.jsonl"
+
+
+def _genset_path(root: Path) -> Path:
+    """Default location of the generation golden set."""
+    return root / "python" / "goldset" / "generation.jsonl"
+
+
+def cmd_gen_eval(args: argparse.Namespace) -> int:
+    """Run the generation eval: retrieve, prompt, generate, check."""
+    from .generation.generator import load_generator
+
+    root = repo_root()
+    genset = load_genset(args.genset or _genset_path(root))
+    config = RetrievalConfig(
+        granularity=args.granularity,
+        use_dense_leg=args.dense,
+        embed_model=args.embed_model,
+    )
+    retriever = Retriever(corpus=load_corpus(cfg=config.chunking), config=config)
+    generator = load_generator(args.model)
+    report = run_generation(genset, retriever, generator, top_k=args.k)
+    print(render_generation(report))
+    if args.json:
+        Path(args.json).write_text(
+            json.dumps(
+                {
+                    "generator": report.generator,
+                    "pass_rate": report.pass_rate,
+                    "incidents": [r.case.case_id for r in report.incidents],
+                    "by_slice": report.by_slice(),
+                },
+                indent=1,
+            ),
+            encoding="utf-8",
+        )
+    return 0 if not args.strict else (0 if report.pass_rate >= 0.85 else 1)
 
 
 def cmd_chunk(args: argparse.Namespace) -> int:
@@ -43,9 +82,9 @@ def cmd_query(args: argparse.Namespace) -> int:
     """Retrieve for one query and print the ranked chunks."""
     retriever = Retriever(corpus=load_corpus(), config=RetrievalConfig())
     for hit in retriever.retrieve(args.text, top_k=args.k):
-        print(f"{hit.rank}. [{hit.score:.3f}] {hit.child.heading_path}")
+        print(f"{hit.rank}. [{hit.score:.3f}] {hit.unit.heading_path}")
         print(f"   {hit.citation}")
-        print(f"   {' '.join(hit.child.text.split())[:160]}")
+        print(f"   {' '.join(hit.unit.text.split())[:160]}")
     return 0
 
 
@@ -120,6 +159,17 @@ def build_parser() -> argparse.ArgumentParser:
         "--strict", action="store_true", help="exit non-zero if gates fail"
     )
     evaluate.set_defaults(func=cmd_eval)
+
+    gen = sub.add_parser("gen-eval", help="run the generation eval on one model")
+    gen.add_argument("--model", default="qwen-1.5b", help="generator key")
+    gen.add_argument("--genset", type=Path, help="generation golden set path")
+    gen.add_argument("--granularity", default="passage", help="child|passage|parent")
+    gen.add_argument("--dense", action="store_true", help="enable the dense leg")
+    gen.add_argument("--embed-model", default="e5-base", help="embedding model key")
+    gen.add_argument("-k", type=int, default=4, help="chunks placed in the prompt")
+    gen.add_argument("--json", help="write a machine-readable summary here")
+    gen.add_argument("--strict", action="store_true", help="exit non-zero on gate fail")
+    gen.set_defaults(func=cmd_gen_eval)
 
     return parser
 

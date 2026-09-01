@@ -22,7 +22,7 @@ from typing import Any
 from ..config import RetrievalConfig
 from ..corpus.models import Corpus, ParentChunk
 from .bm25 import BM25Index, build_index
-from .expansion import expand
+from .expansion import expand, is_transliterated
 from .fusion import reciprocal_rank_fusion
 from .rerank import RerankWeights, mmr_select, score_chunk
 from .tokenizer import index_terms, tokenize
@@ -55,12 +55,15 @@ class Retriever:
     _units: list = field(init=False, repr=False, default_factory=list)
     _index: BM25Index = field(init=False, repr=False, default=None)
     _dense: Any = field(init=False, repr=False, default=None)
+    _vocabulary: frozenset[str] = field(
+        init=False, repr=False, default_factory=frozenset
+    )
 
     def __post_init__(self) -> None:
         self._units = self.corpus.units(self.config.granularity)
-        self._index = build_index(
-            [(u.chunk_id, self._doc_terms(u)) for u in self._units]
-        )
+        indexed = [(u.chunk_id, self._doc_terms(u)) for u in self._units]
+        self._index = build_index(indexed)
+        self._vocabulary = frozenset(t for _, terms in indexed for t in terms)
         if self.config.use_dense_leg:
             self._dense = self._build_dense()
 
@@ -115,8 +118,12 @@ class Retriever:
 
         if self._dense is not None:
             hits = self._dense.search(query, limit=cfg.leg_limit)
-            rankings.append([doc for doc, _ in hits])
-            weights.append(cfg.dense_weight)
+            weight = cfg.dense_weight
+            if is_transliterated(query, self._vocabulary):
+                weight *= cfg.transliterated_dense_weight
+            if weight > 0:
+                rankings.append([doc for doc, _ in hits])
+                weights.append(weight)
 
         return rankings, weights
 
@@ -171,8 +178,19 @@ class Retriever:
         )
 
     def retrieve_ids(self, query: str, *, top_k: int | None = None) -> list[str]:
-        """Return only the ranked unit ids -- the form the metrics consume."""
+        """Ranked unit ids -- what the model's context is built from."""
         return [r.unit_id for r in self.retrieve(query, top_k=top_k)]
+
+    def retrieve_citations(self, query: str, *, top_k: int | None = None) -> list[str]:
+        """Ranked child ids -- what a user actually clicks.
+
+        Scored separately from :meth:`retrieve_ids` because a coarse unit wins
+        span-overlap recall trivially (it contains more lines), while still
+        having to pick the right child out of several to cite correctly.
+        Comparing granularities on unit recall alone would flatter the coarse
+        ones; this is the apples-to-apples number.
+        """
+        return [r.citation for r in self.retrieve(query, top_k=top_k)]
 
     def _materialise(
         self, units: list, scores: list[float], query: str

@@ -81,6 +81,8 @@ class CaseResult:
     mrr: float
     ndcg_at_5: float
     topic_hit: float
+    cite_recall_at_5: float = 0.0
+    cite_mrr: float = 0.0
 
     @property
     def failed(self) -> bool:
@@ -88,17 +90,22 @@ class CaseResult:
         return self.recall_at_5 == 0.0
 
 
-def evaluate_case(ranked: list[str], matcher: CaseMatcher) -> CaseResult:
+def evaluate_case(
+    ranked: list[str], matcher: CaseMatcher, cited: list[str] | None = None
+) -> CaseResult:
     """Compute every metric for one case.
 
     Args:
-        ranked: Retrieved chunk ids, best first.
+        ranked: Retrieved unit ids, best first -- what the model reads.
         matcher: The case bound to its resolved gold spans.
+        cited: Child ids the results cite, best first. Defaults to ``ranked``,
+            which is correct when retrieval already runs at child granularity.
 
     Returns:
         A populated :class:`CaseResult`.
     """
     case = matcher.case
+    cited = ranked if cited is None else cited
     return CaseResult(
         case_id=case.case_id,
         query=case.query,
@@ -112,6 +119,8 @@ def evaluate_case(ranked: list[str], matcher: CaseMatcher) -> CaseResult:
         mrr=reciprocal_rank(ranked, matcher),
         ndcg_at_5=ndcg_at_k(ranked, matcher, 5),
         topic_hit=topic_hit(ranked, matcher),
+        cite_recall_at_5=recall_at_k(cited, matcher, 5),
+        cite_mrr=reciprocal_rank(cited, matcher),
     )
 
 
@@ -124,6 +133,8 @@ METRIC_FIELDS: tuple[str, ...] = (
     "mrr",
     "ndcg_at_5",
     "topic_hit",
+    "cite_recall_at_5",
+    "cite_mrr",
 )
 
 

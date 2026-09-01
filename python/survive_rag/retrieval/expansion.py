@@ -41,3 +41,30 @@ def expanded_query(query: str, *, max_expansions: int = MAX_EXPANSIONS) -> str:
     """Return ``query`` with its expansion terms appended, space-joined."""
     added = expand(query, max_expansions=max_expansions)
     return " ".join([*tokenize(query), *added])
+
+
+def transliterated_terms(query: str, vocabulary: frozenset[str]) -> list[str]:
+    """Query tokens that bridge into the corpus rather than appearing in it.
+
+    A romanised-Hindi token like ``khoon`` is a key in the expansion table but
+    occurs nowhere in the English guides; ``bleeding`` is a key *and* occurs.
+    That difference identifies transliteration with no extra list to maintain
+    and no language-detection model.
+
+    Args:
+        query: Raw user query.
+        vocabulary: Every term indexed from the corpus.
+
+    Returns:
+        The bridging tokens, in query order.
+    """
+    return [
+        token
+        for token in tokenize(query)
+        if token in EXPANSION_TERMS and token not in vocabulary
+    ]
+
+
+def is_transliterated(query: str, vocabulary: frozenset[str]) -> bool:
+    """True when the query leans on romanised-Hindi vocabulary."""
+    return bool(transliterated_terms(query, vocabulary))
