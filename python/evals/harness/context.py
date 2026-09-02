@@ -23,6 +23,7 @@ from survive_rag.generation.prompt import (
     ContextChunk,
     build_chat_prompt,
     estimate_tokens,
+    fit_context,
 )
 
 
@@ -37,6 +38,8 @@ class FillProfile:
         budget_used: Median prompt as a fraction of the token budget.
         truncated_fraction: Share of chunks cut by the per-chunk cap.
         median_chars_dropped: Characters lost per truncated chunk.
+        median_chunks_used: How many of ``top_k`` actually reached the model.
+        dropped_fraction: Share of retrieved chunks the budget excluded.
         over_budget: Prompts that exceeded the budget outright.
     """
 
@@ -46,6 +49,8 @@ class FillProfile:
     budget_used: float
     truncated_fraction: float
     median_chars_dropped: int
+    median_chunks_used: int
+    dropped_fraction: float
     over_budget: int
 
 
@@ -76,23 +81,24 @@ def profile_fill(
         A populated :class:`FillProfile`.
     """
     prompt_tokens: list[int] = []
-    dropped: list[int] = []
+    lost: list[int] = []
+    used: list[int] = []
     chunks_seen = truncated = 0
 
     for query in queries:
         hits = retriever.retrieve(query, top_k=top_k)
-        rendered: list[ContextChunk] = []
+        rendered = [
+            ContextChunk(h.citation, h.unit.topic, h.unit.heading_path, h.context)
+            for h in hits
+        ]
         for hit in hits:
             chunks_seen += 1
-            body = hit.context
-            if len(body) > chunk_chars:
+            if len(hit.context) > chunk_chars:
                 truncated += 1
-                dropped.append(len(body) - chunk_chars)
-                body = body[: chunk_chars - 3] + "..."
-            rendered.append(
-                ContextChunk(hit.citation, hit.unit.topic, hit.unit.heading_path, body)
-            )
-        prompt_tokens.append(estimate_tokens(build_chat_prompt(rendered, [], query)))
+                lost.append(len(hit.context) - chunk_chars)
+        prompt = build_chat_prompt(rendered, [], query, chunk_chars=chunk_chars)
+        prompt_tokens.append(estimate_tokens(prompt))
+        used.append(fit_context(rendered, MAX_PROMPT_TOKENS, chunk_chars)[1])
 
     median = _median(prompt_tokens)
     return FillProfile(
@@ -101,7 +107,9 @@ def profile_fill(
         max_prompt_tokens=max(prompt_tokens, default=0),
         budget_used=median / MAX_PROMPT_TOKENS,
         truncated_fraction=truncated / chunks_seen if chunks_seen else 0.0,
-        median_chars_dropped=_median(dropped),
+        median_chars_dropped=_median(lost),
+        median_chunks_used=_median(used),
+        dropped_fraction=1 - (sum(used) / chunks_seen) if chunks_seen else 0.0,
         over_budget=sum(1 for t in prompt_tokens if t > MAX_PROMPT_TOKENS),
     )
 
@@ -115,14 +123,14 @@ def render_fill(profiles: list[FillProfile]) -> str:
         ),
         "",
         (
-            f"{'top_k':>6}{'median':>9}{'max':>7}{'budget':>9}"
-            f"{'truncated':>11}{'chars lost':>12}{'over':>6}"
+            f"{'top_k':>6}{'median':>9}{'max':>7}{'budget':>8}"
+            f"{'used':>7}{'dropped':>9}{'trunc':>7}{'chars':>7}{'over':>6}"
         ),
     ]
     for p in profiles:
         lines.append(
             f"{p.top_k:>6}{p.median_prompt_tokens:>9}{p.max_prompt_tokens:>7}"
-            f"{p.budget_used:>8.0%}{p.truncated_fraction:>11.0%}"
-            f"{p.median_chars_dropped:>12}{p.over_budget:>6}"
+            f"{p.budget_used:>7.0%}{p.median_chunks_used:>7}{p.dropped_fraction:>9.0%}"
+            f"{p.truncated_fraction:>7.0%}{p.median_chars_dropped:>7}{p.over_budget:>6}"
         )
     return "\n".join(lines)

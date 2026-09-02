@@ -85,9 +85,11 @@ def test_fill_profile_renders_a_table() -> None:
                 budget_used=0.61,
                 truncated_fraction=0.92,
                 median_chars_dropped=300,
+                median_chunks_used=4,
+                dropped_fraction=0.0,
                 over_budget=0,
             )
         ]
     )
     assert str(MAX_PROMPT_TOKENS) in text
-    assert "top_k" in text and "truncated" in text
+    assert "top_k" in text and "trunc" in text and "used" in text

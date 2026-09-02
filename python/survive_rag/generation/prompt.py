@@ -28,8 +28,10 @@ RESERVED_OUTPUT_TOKENS = 512
 SAFETY_TOKENS = 84
 MAX_PROMPT_TOKENS = CONTEXT_TOKENS - RESERVED_OUTPUT_TOKENS - SAFETY_TOKENS
 
-MAX_CHUNK_CHARS = 700
+MAX_CHUNK_CHARS = 1400
 MAX_HISTORY_TURNS = 4
+# Held back from the reference block so history always has room.
+HISTORY_RESERVE_TOKENS = 220
 
 INSTRUCTION = (
     "You are Survive AI, an offline survival expert. "
@@ -62,18 +64,50 @@ class ContextChunk:
     heading_path: str
     body: str
 
-    def render(self) -> str:
+    def render(self, chunk_chars: int = MAX_CHUNK_CHARS) -> str:
         """Format as ``[source]\\nbody``, truncated to the per-chunk cap."""
         source = f"{self.topic} > {self.heading_path}" if self.heading_path else self.topic
         body = self.body
-        if len(body) > MAX_CHUNK_CHARS:
-            body = body[: MAX_CHUNK_CHARS - 3] + "..."
+        if len(body) > chunk_chars:
+            body = body[: chunk_chars - 3] + "..."
         return f"[{source}]\n{body}"
 
 
-def build_context(chunks: list[ContextChunk]) -> str:
-    """Join rendered chunks into the reference block."""
-    return "\n\n".join(c.render() for c in chunks)
+def fit_context(
+    chunks: list[ContextChunk], budget_tokens: int, chunk_chars: int = MAX_CHUNK_CHARS
+) -> tuple[str, int]:
+    """Fit as many chunks as the budget allows, best first.
+
+    Chunks arrive ranked, so dropping from the end sheds the least relevant
+    material. The alternative -- refusing the whole block when it does not fit
+    -- fails silently and catastrophically: the model receives no reference
+    material at all and answers from its own pretraining, which is exactly the
+    failure the retrieval work exists to prevent. The first chunk is always
+    kept, because an oversized best chunk is still better than nothing.
+
+    Args:
+        chunks: Retrieved reference material, best first.
+        budget_tokens: Tokens available for the reference block.
+        chunk_chars: Per-chunk character cap.
+
+    Returns:
+        ``(rendered_block, chunks_used)``.
+    """
+    kept: list[str] = []
+    used = 0
+    for chunk in chunks:
+        rendered = chunk.render(chunk_chars)
+        cost = estimate_tokens(rendered) + 2
+        if kept and used + cost > budget_tokens:
+            break
+        kept.append(rendered)
+        used += cost
+    return "\n\n".join(kept), len(kept)
+
+
+def build_context(chunks: list[ContextChunk], chunk_chars: int = MAX_CHUNK_CHARS) -> str:
+    """Join every rendered chunk, ignoring any budget."""
+    return "\n\n".join(c.render(chunk_chars) for c in chunks)
 
 
 def build_history(history: list[tuple[str, str]], max_tokens: int) -> str:
@@ -105,6 +139,9 @@ def build_chat_prompt(
     chunks: list[ContextChunk],
     history: list[tuple[str, str]],
     user_message: str,
+    *,
+    chunk_chars: int = MAX_CHUNK_CHARS,
+    history_reserve: int = HISTORY_RESERVE_TOKENS,
 ) -> str:
     """Build the full prompt for one RAG-augmented turn.
 
@@ -112,6 +149,9 @@ def build_chat_prompt(
         chunks: Retrieved reference material, best first.
         history: Prior turns, oldest first, excluding ``user_message``.
         user_message: What the user just asked.
+        chunk_chars: Per-chunk character cap.
+        history_reserve: Tokens held back for conversation history, so a long
+            reference block cannot crowd out the thread of the conversation.
 
     Returns:
         Plain text with no turn markers -- flutter_gemma adds its own, and
@@ -120,12 +160,12 @@ def build_chat_prompt(
     parts: list[str] = []
     used = estimate_tokens(INSTRUCTION) + estimate_tokens(user_message) + 5
 
-    context = build_context(chunks)
+    reserve = history_reserve if history else 0
+    available = MAX_PROMPT_TOKENS - used - reserve - 10
+    context, _ = fit_context(chunks, available, chunk_chars) if available > 0 else ("", 0)
     if context:
-        cost = estimate_tokens(context) + 4
-        if used + cost + 50 < MAX_PROMPT_TOKENS:
-            parts.append(f"Reference information from survival guides:\n{context}\n")
-            used += cost + 6
+        parts.append(f"Reference information from survival guides:\n{context}\n")
+        used += estimate_tokens(context) + 6
 
     if history and MAX_PROMPT_TOKENS - used > 50:
         rendered = build_history(history, MAX_PROMPT_TOKENS - used)

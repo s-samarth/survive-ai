@@ -18,11 +18,13 @@ from evals.harness.gen_checks import (
 from evals.harness.gen_report import GenReport, gate_status
 from evals.harness.gen_runner import check_answer
 from survive_rag.generation.prompt import (
+    HISTORY_RESERVE_TOKENS,
     INSTRUCTION,
     MAX_PROMPT_TOKENS,
     ContextChunk,
     build_chat_prompt,
     estimate_tokens,
+    fit_context,
 )
 
 
@@ -111,10 +113,50 @@ def test_prompt_is_instruction_last() -> None:
 
 
 def test_prompt_respects_the_token_budget() -> None:
-    """Oversized context is dropped rather than blowing the context window."""
+    """Oversized context is trimmed rather than blowing the context window."""
     huge = ContextChunk("id", "t", "h", "word " * 5000)
     prompt = build_chat_prompt([huge], [], "what do I do")
     assert estimate_tokens(prompt) < MAX_PROMPT_TOKENS
+
+
+def test_oversized_context_is_trimmed_not_discarded() -> None:
+    """The bug this guards: an all-or-nothing block silently sent NO context.
+
+    When the reference material did not fit, the whole block was dropped and
+    the model answered from pretraining with nothing retrieved -- the exact
+    failure the retrieval work exists to prevent, and invisible in every
+    metric that does not look at the prompt.
+    """
+    chunks = [ContextChunk(f"id{i}", "t", "h", "word " * 400) for i in range(8)]
+    prompt = build_chat_prompt(chunks, [], "what do I do")
+    assert "Reference information" in prompt
+    assert estimate_tokens(prompt) <= MAX_PROMPT_TOKENS
+
+
+def test_fit_context_keeps_the_best_chunks_and_drops_the_tail() -> None:
+    """Chunks arrive ranked, so the budget must shed the least relevant."""
+    chunks = [ContextChunk(f"id{i}", "t", "h", f"chunk{i} " * 100) for i in range(6)]
+    block, used = fit_context(chunks, 400)
+    assert 0 < used < 6
+    assert "chunk0" in block
+    assert f"chunk{used}" not in block
+
+
+def test_fit_context_always_keeps_at_least_one_chunk() -> None:
+    """A single oversized best chunk still beats sending nothing at all."""
+    _, used = fit_context([ContextChunk("id", "t", "h", "word " * 5000)], 10)
+    assert used == 1
+
+
+def test_history_is_never_crowded_out_by_context() -> None:
+    """A long reference block must not cost the thread of the conversation."""
+    chunks = [ContextChunk(f"id{i}", "t", "h", "word " * 400) for i in range(8)]
+    history = [("user", "first question"), ("model", "first answer")]
+    prompt = build_chat_prompt(chunks, history, "follow up")
+    assert "Reference information" in prompt
+    assert "Previous exchange" in prompt
+    assert estimate_tokens(prompt) <= MAX_PROMPT_TOKENS
+    assert HISTORY_RESERVE_TOKENS > 0
 
 
 def test_gates_fail_on_a_single_safety_incident() -> None:

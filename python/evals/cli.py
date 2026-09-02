@@ -17,6 +17,8 @@ from __future__ import annotations
 import argparse
 from pathlib import Path
 
+from survive_rag.generation.prompt import MAX_CHUNK_CHARS
+
 from .commands.conversation import cmd_multiturn
 from .commands.generation import cmd_context, cmd_gen_eval, cmd_perf
 from .commands.retrieval import cmd_eval, cmd_validate
@@ -76,7 +78,9 @@ def build_parser() -> argparse.ArgumentParser:
         "--top-k", type=int, nargs="+", default=[3, 4, 5, 6, 8, 10], help="values to profile"
     )
     context.add_argument("-n", type=int, default=80, help="queries to profile")
-    context.add_argument("--chunk-chars", type=int, default=700, help="per-chunk cap")
+    context.add_argument(
+        "--chunk-chars", type=int, default=MAX_CHUNK_CHARS, help="per-chunk cap"
+    )
     _add_retrieval_flags(context)
     context.set_defaults(func=cmd_context)
     return parser

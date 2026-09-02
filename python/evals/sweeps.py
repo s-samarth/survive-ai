@@ -97,7 +97,7 @@ def models() -> list[RetrievalConfig]:
         BASELINE.with_(name="lexical-only"),
         *[
             BASELINE.with_(name=f"hybrid-{m}", use_dense_leg=True, embed_model=m)
-            for m in ("minilm", "bge-small", "e5-small", "e5-base")
+            for m in ("minilm", "bge-small", "e5-small", "e5-base", "embeddinggemma")
         ],
     ]
 
