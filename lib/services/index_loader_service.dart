@@ -6,6 +6,7 @@ import 'package:flutter/services.dart' show rootBundle;
 import '../models/citation.dart';
 import '../models/doc_chunk.dart';
 import '../models/doc_topic.dart';
+import 'embedding/vector_index.dart';
 
 /// One guide's share of the prebuilt index.
 class IndexedGuide {
@@ -33,14 +34,22 @@ class IndexedGuide {
 ///
 /// Built by `python -m survive_rag chunk --export assets/index/corpus.json`.
 class IndexLoaderService {
-  const IndexLoaderService({Future<String> Function(String key)? readAsset})
-    : _readAsset = readAsset;
+  const IndexLoaderService({
+    Future<String> Function(String key)? readAsset,
+    Future<VectorIndex?> Function()? loadVectors,
+  }) : _readAsset = readAsset,
+       _loadVectors = loadVectors;
 
   /// How the artifact is read. Injectable so tests can supply a fixture:
   /// mocking the asset channel silently falls through to the real bundle,
   /// and a fixture that happens to resemble the real corpus then passes for
   /// the wrong reason.
   final Future<String> Function(String key)? _readAsset;
+
+  /// How the passage vectors are read. Injectable for the same reason
+  /// [_readAsset] is, and separate from the index itself so a missing vector
+  /// file degrades the dense leg rather than failing the whole load.
+  final Future<VectorIndex?> Function()? _loadVectors;
 
   static const String assetPath = 'assets/index/corpus.json';
 
@@ -56,6 +65,7 @@ class IndexLoaderService {
     try {
       final read = _readAsset ?? rootBundle.loadString;
       final raw = await read(assetPath);
+      final vectors = await (_loadVectors ?? VectorIndex.load)();
       final decoded = json.decode(raw) as Map<String, dynamic>;
 
       if (decoded['schema'] != supportedSchema) {
@@ -65,7 +75,7 @@ class IndexLoaderService {
         );
         return null;
       }
-      return _group(decoded);
+      return _group(decoded, vectors);
     } catch (e) {
       debugPrint('No prebuilt index ($e); falling back to runtime chunking.');
       return null;
@@ -76,7 +86,10 @@ class IndexLoaderService {
   ///
   /// Only children carry text in the artifact — passages are id lists — so
   /// the passage body is rebuilt here rather than stored three times.
-  Map<String, IndexedGuide> _group(Map<String, dynamic> decoded) {
+  Map<String, IndexedGuide> _group(
+    Map<String, dynamic> decoded,
+    VectorIndex? vectors,
+  ) {
     final children = <String, Map<String, dynamic>>{
       for (final c in (decoded['children'] as List).cast<Map<String, dynamic>>())
         c['chunk_id'] as String: c,
@@ -112,6 +125,7 @@ class IndexLoaderService {
           headingPath: row['heading_path'] as String? ?? '',
           body: bodies.join('\n'),
           chunkIndex: index,
+          embedding: vectors?.vectors[passageId],
         ),
       );
     }

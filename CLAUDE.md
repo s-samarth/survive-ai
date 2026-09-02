@@ -80,7 +80,22 @@ triggers, orphaning the old index row and appending a duplicate.
 
 **Embedding service (disabled):** `EmbeddingService.isEnabled` is false, so `RagService` skips the dense leg entirely — no vector is allocated on the query path. Intentional: a second native ML runtime alongside Gemma does not fit the memory budget on a 4-6 GB device. `EmbeddingGemma-300m` runs in under 200 MB and is the candidate for enabling it; the plumbing is a one-flag change.
 
-**Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts` (FTS5 virtual table for BM25). The `chunks` table has an `embedding BLOB` column reserved for future dense retrieval.
+**Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts`
+(FTS5 virtual table for BM25) + `citations`. The `chunks.embedding` BLOB holds
+the passage vector that shipped with the index.
+
+**Store the view's own window, not `.buffer`.** Vectors arrive as slices of one
+large file-backed buffer, and `Float32List.buffer` returns the whole backing
+store — writing `embedding.buffer.asUint8List()` gave every passage the entire
+603 KB vector file. Nothing threw: cosine saw mismatched lengths, returned 0.0
+for every pair, and the dense leg ranked every query identically.
+
+**`DatabaseService` takes an optional `databasePath` so tests can drive the
+real class.** They previously rebuilt the schema by hand, so `insertChunks`,
+`deleteChunksForDoc` and `searchFts` were never executed by anything — all
+three named a `chunk_id` column the FTS table does not have, and keyword search
+could not return a row on a device while every test passed. Test through
+`DatabaseService`, not around it.
 
 **Zero-Wait RAG:** `SyncService.seedFromAssets()` runs from `main.dart` on **every** launch, independent of the model. It is idempotent (skips topics already at `bundledVersion`). Do not move it back behind the model-download flow — a sideloaded or already-present model then leaves the corpus permanently empty. Bump `SyncService.bundledVersion` whenever the shipped Markdown changes.
 

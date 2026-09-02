@@ -3,17 +3,31 @@
 class DocManifest {
   final String version;
   final ModelInfo model;
+
+  /// The query encoder for the dense retrieval leg, when the manifest offers
+  /// one. Optional and separately downloadable: the app answers without it on
+  /// its two lexical legs, so an older manifest is a weaker build rather than
+  /// a broken one.
+  final List<ModelInfo> embedder;
+
   final List<DocEntry> docs;
 
   const DocManifest({
     required this.version,
     required this.model,
     required this.docs,
+    this.embedder = const [],
   });
 
   factory DocManifest.fromJson(Map<String, dynamic> json) => DocManifest(
     version: json['version'] as String,
     model: ModelInfo.fromJson(json['model'] as Map<String, dynamic>),
+    // A list because the ONNX graph and its weight sidecar are two files that
+    // must land in the same directory under exact names; either alone is
+    // useless, so they are fetched and checked as a set.
+    embedder: ((json['embedder'] as List?) ?? const [])
+        .map((e) => ModelInfo.fromJson(e as Map<String, dynamic>))
+        .toList(),
     docs: (json['docs'] as List)
         .map((d) => DocEntry.fromJson(d as Map<String, dynamic>))
         .toList(),

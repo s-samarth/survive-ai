@@ -202,32 +202,50 @@ class SyncService {
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /// Compute and store embeddings for a list of chunks.
+  /// Embed only the chunks that arrived without a vector.
   ///
-  /// Uses [EmbeddingService.embedBatch] which loads TFLite, runs all chunks,
-  /// then immediately disposes the interpreter. This keeps peak memory usage
-  /// bounded and ensures the TFLite runtime is released before Gemma loads.
+  /// The bundled corpus ships pre-embedded, so in the ordinary case this does
+  /// nothing at all — which is the point. Embedding 201 passages on a 4 GB
+  /// phone at every launch would cost minutes and buy vectors identical to the
+  /// ones already in the asset.
   ///
-  /// If the embedding model is not available (asset missing), this is a no-op
-  /// and chunks remain with NULL embeddings — retrieval falls back to BM25.
+  /// What does reach here is a guide freshly downloaded from GitHub, chunked
+  /// on the device and therefore absent from the shipped vector file. Leaving
+  /// those unembedded would quietly exclude the newest content from the dense
+  /// leg — present in keyword search, invisible to semantic search.
+  ///
+  /// When no embedder is available this is a no-op and the chunks keep NULL
+  /// embeddings; retrieval falls back to its two lexical legs.
   Future<void> _embedChunks(List<DocChunk> chunks) async {
-    if (chunks.isEmpty) return;
+    if (!_embedder.isEnabled) return;
+    final pending = chunks.where((c) => c.embedding == null).toList();
+    if (pending.isEmpty) return;
 
     // Prepend heading to chunk body for richer semantic context
-    final texts = chunks.map((c) {
-      return c.headingPath.isNotEmpty ? '${c.headingPath}: ${c.body}' : c.body;
-    }).toList();
+    final texts = pending
+        .map((c) => c.headingPath.isNotEmpty ? '${c.headingPath}: ${c.body}' : c.body)
+        .toList();
 
     final embeddings = await _embedder.embedBatch(texts);
-    if (embeddings.isEmpty) return; // Model not available — skip silently
-
-    for (var i = 0; i < chunks.length && i < embeddings.length; i++) {
-      await _db.updateChunkEmbedding(chunks[i].id, embeddings[i]);
+    for (var i = 0; i < pending.length && i < embeddings.length; i++) {
+      if (embeddings[i].isEmpty) continue;
+      await _db.updateChunkEmbedding(pending[i].id, embeddings[i]);
     }
   }
 
   /// Fetch the model entry from the manifest, or null when offline or the
   /// manifest is unreachable. Callers fall back to their compiled-in defaults.
+  /// The whole manifest, or null when offline or unreachable.
+  Future<DocManifest?> fetchManifest() async {
+    if (!await isOnline()) return null;
+    try {
+      return await _fetchManifest();
+    } catch (e) {
+      debugPrint('Could not fetch the manifest: $e');
+      return null;
+    }
+  }
+
   Future<ModelInfo?> fetchModelInfo() async {
     if (!await isOnline()) return null;
     try {

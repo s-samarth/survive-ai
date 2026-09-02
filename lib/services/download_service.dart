@@ -23,6 +23,8 @@ class ChecksumMismatchException implements Exception {
 /// connection in a village, a 1.3 GB download will be interrupted many times,
 /// so resume is not a nicety — it is the only way the download ever completes.
 class DownloadService {
+  const DownloadService();
+
   /// Download [url] into `<app documents>/<subfolder>/<filename>`.
   ///
   /// Resumes from a previous partial download when the sidecar metadata proves

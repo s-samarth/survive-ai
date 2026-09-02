@@ -1,26 +1,28 @@
 import 'dart:math';
 import 'dart:typed_data';
 
-/// Dense-retrieval hook, currently disabled.
+/// The no-op embedder: the base class, and the state a build is in before the
+/// encoder has been downloaded.
 ///
-/// [isEnabled] is false, so [embedQuery] and [embedBatch] return empty results
-/// and [RagService] skips the dense leg entirely — no vector is allocated and
-/// no similarity loop runs on the hot query path. (The previous stub allocated
-/// a 100-float zero vector per query and then scanned it to discover it was
-/// zero.)
+/// [isEnabled] is false here, so [RagService] skips the dense leg entirely —
+/// no vector is allocated and no similarity loop runs on the hot query path.
+/// The app still answers, on its two lexical legs, which is why a missing
+/// encoder is a degradation and not an outage.
 ///
-/// Why disabled: a second native ML runtime alongside the Gemma weights does
-/// not fit in the memory budget on a 4-6 GB device. [QueryExpander] covers the
-/// vocabulary gap that dense retrieval would otherwise close, at zero memory
-/// cost. The plumbing stays so that enabling a small quantised embedding model
-/// (EmbeddingGemma-300m runs in under 200 MB) is a one-flag change.
+/// The working implementation is [OnnxEmbeddingService], which runs
+/// EmbeddingGemma-300m over the query alone; the corpus is embedded offline
+/// and ships as vectors. Anything that reads a vector must go through
+/// [dimensions] rather than assuming [dims], because the stride used to read
+/// the `chunks.embedding` BLOB has to match the model that wrote it.
 class EmbeddingService {
-  /// Embedding width, used when [isEnabled] becomes true. Must match the
-  /// stride used to read the `chunks.embedding` BLOB.
+  /// Width of an EmbeddingGemma vector, and the default stride.
   static const int dims = 768;
 
   /// Flip to true only together with a real embedding backend.
   bool get isEnabled => false;
+
+  /// Width of the vectors this embedder produces.
+  int get dimensions => dims;
 
   Future<Float32List> embedQuery(String text) async => Float32List(0);
 

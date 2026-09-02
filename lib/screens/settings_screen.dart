@@ -1,5 +1,7 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+
+import '../widgets/encoder_download_tile.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -156,6 +158,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
                 style: Theme.of(context).textTheme.bodySmall,
               ),
             ),
+          const Divider(),
+          _SectionHeader(title: 'Search quality'),
+          const EncoderDownloadTile(),
           const Divider(),
           _SectionHeader(title: 'About'),
           const ListTile(
