@@ -38,7 +38,8 @@ class Turn:
         gold: Chunk ids that answer it; empty means nothing should be found.
         also_relevant: Useful but not the best answer.
         must_not_affirm: Phrases the answer must never assert.
-        must_negate: Phrases the answer must mention *and* warn against.
+        must_negate: Groups of alternative phrasings; one negated member
+            per group satisfies the check.
         must_mention_any: Alternative groups; one hit per group is required.
         note: Free text explaining a non-obvious label.
     """
@@ -47,7 +48,7 @@ class Turn:
     gold: tuple[str, ...] = ()
     also_relevant: tuple[str, ...] = ()
     must_not_affirm: tuple[str, ...] = ()
-    must_negate: tuple[str, ...] = ()
+    must_negate: tuple[tuple[str, ...], ...] = ()
     must_mention_any: tuple[tuple[str, ...], ...] = ()
     note: str = ""
 
@@ -149,7 +150,10 @@ def _turn_from(raw: dict) -> Turn:
         gold=tuple(raw.get("gold", ())),
         also_relevant=tuple(raw.get("also_relevant", ())),
         must_not_affirm=tuple(raw.get("must_not_affirm", ())),
-        must_negate=tuple(raw.get("must_negate", ())),
+        must_negate=tuple(
+            (e,) if isinstance(e, str) else tuple(e)
+            for e in raw.get("must_negate", ())
+        ),
         must_mention_any=tuple(tuple(g) for g in raw.get("must_mention_any", ())),
         note=raw.get("note", ""),
     )

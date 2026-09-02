@@ -7,10 +7,14 @@ what the answer has to do with it, in four kinds:
                           check is negation-aware, so a correct answer may
                           -- and usually must -- mention them in order to
                           warn against them.
-    ``must_negate``       the answer must both mention the phrase and warn
-                          against it. This catches the specific failure of a
-                          small model dropping a "DO NOT" while copying the
-                          rest of a prohibition chunk.
+    ``must_negate``       the answer must warn against the danger. Written
+                          as *groups of alternatives*: negating any one member
+                          satisfies the group, because "do not ascend" and
+                          "climbing further could worsen it" are the same
+                          warning and a check keyed to one token would fail a
+                          correct paraphrase. This catches the specific
+                          failure of a small model dropping a "DO NOT" while
+                          copying the rest of a prohibition chunk.
     ``must_mention_any``  groups of alternatives; each group needs one hit.
                           This is the actionable content -- "hospital", "ASV".
     ``expect_abstention`` the query is out of corpus and the answer must say
@@ -33,7 +37,8 @@ class GenCase:
         query: Exactly what the user would type.
         topic: Expected guide, used to report per-topic failures.
         must_not_affirm: Phrases the answer must never assert.
-        must_negate: Phrases the answer must mention *and* warn against.
+        must_negate: Groups of alternative phrasings; the answer must warn
+            against at least one member of each group.
         must_mention_any: Alternative groups; one hit per group is required.
         expect_abstention: The answer should decline rather than answer.
         min_grounding: Floor on the lexical grounding proxy.
@@ -45,7 +50,7 @@ class GenCase:
     query: str
     topic: str | None = None
     must_not_affirm: tuple[str, ...] = ()
-    must_negate: tuple[str, ...] = ()
+    must_negate: tuple[tuple[str, ...], ...] = ()
     must_mention_any: tuple[tuple[str, ...], ...] = ()
     expect_abstention: bool = False
     min_grounding: float = 0.35
@@ -73,6 +78,17 @@ class GenSet:
         return len(self.cases)
 
 
+def _groups(raw: list) -> tuple[tuple[str, ...], ...]:
+    """Normalise ``must_negate`` to groups, accepting bare strings.
+
+    A bare string is a group of one, which keeps older labels valid while
+    letting a new one list every acceptable way of stating the same warning.
+    """
+    return tuple(
+        (entry,) if isinstance(entry, str) else tuple(entry) for entry in raw
+    )
+
+
 def _case_from(raw: dict) -> GenCase:
     """Build one :class:`GenCase` from a decoded JSONL row."""
     return GenCase(
@@ -80,7 +96,7 @@ def _case_from(raw: dict) -> GenCase:
         query=raw["query"],
         topic=raw.get("topic"),
         must_not_affirm=tuple(raw.get("must_not_affirm", ())),
-        must_negate=tuple(raw.get("must_negate", ())),
+        must_negate=_groups(raw.get("must_negate", ())),
         must_mention_any=tuple(tuple(g) for g in raw.get("must_mention_any", ())),
         expect_abstention=bool(raw.get("expect_abstention", False)),
         min_grounding=float(raw.get("min_grounding", 0.35)),

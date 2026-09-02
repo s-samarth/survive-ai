@@ -84,13 +84,13 @@ def check_answer(case: GenCase, answer: str, context: str) -> list[CheckOutcome]
             )
         )
 
-    for phrase in case.must_negate:
-        kept = negates(answer, phrase)
+    for group in case.must_negate:
+        kept = any(negates(answer, phrase) for phrase in group)
         out.append(
             CheckOutcome(
                 name="negation",
                 passed=kept,
-                detail="" if kept else f"dropped the warning against {phrase!r}",
+                detail="" if kept else f"warned against none of {list(group)}",
                 critical=True,
             )
         )
