@@ -86,9 +86,15 @@ def test_bridge_words_rescue_a_hinglish_emergency() -> None:
     assert route("saanp ne kaata", rescued).intent == ANSWER
 
 
-def test_no_dense_signal_declines_rather_than_guesses() -> None:
-    """With no evidence at all, admitting ignorance beats improvising."""
-    assert route("something obscure", Signals()).intent == DECLINE
+def test_measured_zero_declines_but_unknown_does_not() -> None:
+    """A measured zero justifies declining; an absent embedder does not.
+
+    Treating "unknown" as "zero" would turn away every emergency on a build
+    without the embedder, which is the worst possible failure.
+    """
+    assert route("something obscure", Signals(confidence=0.0)).intent == DECLINE
+    # An absent embedder is not evidence of anything.
+    assert route("something obscure", Signals()).intent == ANSWER
 
 
 def test_thresholds_are_ordered() -> None:

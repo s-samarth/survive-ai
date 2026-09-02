@@ -27,6 +27,9 @@ class PromptBuilder {
   /// long reference block can never crowd out the thread of the conversation.
   static const int _historyReserveTokens = 220;
 
+  /// Turns considered for history, newest first.
+  static const int maxHistoryTurns = 4;
+
   /// Short instruction placed RIGHT BEFORE the question (~60 tokens).
   ///
   /// On a 2B model, a long system prompt at the top of the context gets
@@ -120,35 +123,55 @@ class PromptBuilder {
     return buffer.toString();
   }
 
+  /// Longest a user's own question is allowed to be in history.
+  ///
+  /// Questions are short and load-bearing: "should I tie something above it"
+  /// is what the next retrieval and the next answer both hang on.
+  static const int _maxUserChars = 400;
+
+  /// Longest a previous answer is allowed to be.
+  ///
+  /// Answers are long — a median of ~89 tokens — and recoverable: the model
+  /// can restate advice, but it cannot recover a question it never saw. So
+  /// they are cut harder than questions when the budget is tight.
+  static const int _maxAssistantChars = 220;
+
   /// Build conversation history text, fitting within [maxTokens].
   ///
-  /// Takes the most recent 4 turns. Uses Q:/A: format instead of
-  /// User:/Assistant: to avoid role confusion when the entire prompt
-  /// is inside a single `<start_of_turn>user` block.
+  /// Walks from the MOST RECENT backwards. The previous version filled
+  /// oldest-first and stopped at the budget, which kept the oldest turns and
+  /// dropped the newest — exactly backwards for a follow-up question, where
+  /// the last exchange is the one the current turn depends on.
+  ///
+  /// Uses Q:/A: instead of User:/Assistant: to avoid role confusion, since the
+  /// whole prompt sits inside a single `<start_of_turn>user` block.
   static String _buildHistory(List<ChatMessage> history, int maxTokens) {
-    final recent = history.length > 4
-        ? history.sublist(history.length - 4)
+    final recent = history.length > maxHistoryTurns
+        ? history.sublist(history.length - maxHistoryTurns)
         : history;
 
     final lines = <String>[];
     var tokens = 5; // header
 
-    for (final msg in recent) {
-      final label = msg.role == 'user' ? 'Q' : 'A';
+    for (final msg in recent.reversed) {
+      final isUser = msg.role == 'user';
+      final cap = isUser ? _maxUserChars : _maxAssistantChars;
       var content = msg.content;
-      if (content.length > 400) {
-        content = '${content.substring(0, 397)}...';
+      if (content.length > cap) {
+        content = '${content.substring(0, cap - 3)}...';
       }
-      final line = '$label: $content';
+      final line = '${isUser ? 'Q' : 'A'}: $content';
       final lineTokens = _estimateTokens(line);
 
-      if (tokens + lineTokens > maxTokens) break;
+      // Always keep the most recent turn: a follow-up without it is
+      // unanswerable, and an oversized turn beats an absent one.
+      if (lines.isNotEmpty && tokens + lineTokens > maxTokens) break;
       lines.add(line);
       tokens += lineTokens;
     }
 
     if (lines.isEmpty) return '';
-    return 'Previous exchange:\n${lines.join('\n')}';
+    return 'Previous exchange:\n${lines.reversed.join('\n')}';
   }
 
   /// Per-chunk character cap.

@@ -121,6 +121,81 @@ void main() {
     });
   });
 
+  group('PromptBuilder history budget', () {
+    ChatMessage msg(String role, String content) =>
+        ChatMessage(role: role, content: content, timestamp: DateTime.now());
+
+    test('keeps the most recent turns, not the oldest', () {
+      // The bug this guards: history filled oldest-first and stopped at the
+      // budget, so a tight budget kept the OLDEST turns and dropped the
+      // newest — exactly backwards for a follow-up, which depends on the
+      // last exchange.
+      final history = [
+        msg('user', 'oldest question ' * 60),
+        msg('assistant', 'oldest answer ' * 60),
+        msg('user', 'MOST RECENT QUESTION'),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [chunk('c', 'word ' * 300)],
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      expect(prompt, contains('MOST RECENT QUESTION'));
+    });
+
+    test('history stays in chronological order', () {
+      final history = [
+        msg('user', 'first question'),
+        msg('assistant', 'first answer'),
+        msg('user', 'second question'),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [],
+        history: history,
+        userMessage: 'third',
+      );
+
+      expect(
+        prompt.indexOf('first question'),
+        lessThan(prompt.indexOf('second question')),
+      );
+    });
+
+    test('answers are trimmed harder than questions', () {
+      // Questions are short and load-bearing; answers are long and the model
+      // can restate them. It cannot recover a question it never saw.
+      final history = [
+        msg('user', 'Q' * 500),
+        msg('assistant', 'A' * 500),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [],
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      final questionRun = RegExp(r'Q+').allMatches(prompt).map((m) => m.end - m.start);
+      final answerRun = RegExp(r'A+').allMatches(prompt).map((m) => m.end - m.start);
+      expect(questionRun.reduce((a, b) => a > b ? a : b),
+          greaterThan(answerRun.reduce((a, b) => a > b ? a : b)));
+    });
+
+    test('the last turn survives even when oversized', () {
+      // A follow-up with no history at all is unanswerable.
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [chunk('c', 'word ' * 400)],
+        history: [msg('user', 'a very long question ' * 80)],
+        userMessage: 'and then?',
+      );
+
+      expect(prompt, contains('Previous exchange'));
+    });
+  });
+
   group('PromptBuilder.buildChatPrompt', () {
     test('does not include turn markers (flutter_gemma adds them)', () {
       final prompt = PromptBuilder.buildChatPrompt(

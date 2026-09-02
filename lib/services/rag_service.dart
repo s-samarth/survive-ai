@@ -81,6 +81,35 @@ class RagService {
     return _db.getChunksByIds(topIds);
   }
 
+  /// Top embedding cosine for [query], or null when this build has no
+  /// embedder.
+  ///
+  /// This is the signal the router declines on. It separates where BM25 does
+  /// not: measured over 382 golden-set cases, in-corpus queries score
+  /// 0.30-0.70 and out-of-corpus ones 0.09-0.22, while BM25 overlaps
+  /// completely.
+  ///
+  /// Null means *unknown*, which is not the same as zero. A zero was measured
+  /// and justifies declining; an unknown must not, because refusing on absent
+  /// evidence would turn away emergencies on a build without the embedder.
+  Future<double?> confidence(String query, {String? topicFilter}) async {
+    if (!_embedder.isEnabled) return null;
+
+    final queryVec = await _embedder.embedQuery(query);
+    if (queryVec.isEmpty) return null;
+
+    final embeddings = await _db.getAllEmbeddings(topicFilter: topicFilter);
+    if (embeddings.isEmpty) return null;
+
+    var best = 0.0;
+    for (final entry in embeddings) {
+      final (_, vec) = entry;
+      final score = EmbeddingService.cosine(queryVec, vec);
+      if (score > best) best = score;
+    }
+    return best;
+  }
+
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------

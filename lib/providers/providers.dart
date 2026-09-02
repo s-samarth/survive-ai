@@ -3,6 +3,7 @@ import '../services/database_service.dart';
 import '../services/embedding_service.dart';
 import '../services/llm_service.dart';
 import '../services/chunker_service.dart';
+import '../services/chat_turn_service.dart';
 import '../services/rag_service.dart';
 import '../services/sync_service.dart';
 
@@ -33,6 +34,16 @@ final ragServiceProvider = Provider<RagService>((ref) {
   final db = ref.watch(databaseServiceProvider);
   final embedder = ref.watch(embeddingServiceProvider);
   return RagService(db, embedder);
+});
+
+/// Runs one conversational turn: route, retrieve, prompt, generate, guard.
+///
+/// The chat screen dispatches to this and renders what comes back; none of
+/// the pipeline lives in the widget.
+final chatTurnServiceProvider = Provider<ChatTurnService>((ref) {
+  final rag = ref.watch(ragServiceProvider);
+  final llm = ref.watch(llmServiceProvider);
+  return ChatTurnService(rag, llm);
 });
 
 final syncServiceProvider = Provider<SyncService>((ref) {

@@ -4,12 +4,20 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../models/chat_message.dart';
 import '../models/doc_chunk.dart';
 import '../providers/providers.dart';
-import '../utils/prompt_builder.dart';
+import '../services/chat_turn_service.dart';
+import '../widgets/chat_empty_state.dart';
+import '../widgets/chat_input_bar.dart';
 import '../widgets/message_bubble.dart';
+import '../widgets/retrieval_status.dart';
 
-/// Main chat interface — RAG-augmented conversation with the on-device LLM.
+/// Main chat interface.
 ///
-/// [topicFilter] — optional topic to scope RAG retrieval (e.g. from guide reader).
+/// Holds no pipeline logic: it dispatches to [ChatTurnService] and renders the
+/// events that come back. Routing, retrieval, prompting, generation and the
+/// safety guard all live in the service, where each has a measurable failure
+/// mode and none is easier to test through a `setState`.
+///
+/// [topicFilter] scopes retrieval, e.g. when opened from a guide.
 class ChatScreen extends ConsumerStatefulWidget {
   final String? topicFilter;
 
@@ -25,6 +33,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final List<ChatMessage> _history = [];
   bool _isGenerating = false;
   String _streamingBuffer = '';
+  List<DocChunk> _sources = const [];
 
   // Timer used to batch token-streaming setState calls.
   // Without batching, every token triggers a setState + String allocation,
@@ -39,140 +48,69 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     super.dispose();
   }
 
-  Future<void> _sendMessage() async {
-    final text = _controller.text.trim();
+  Future<void> _send(String text) async {
     if (text.isEmpty || _isGenerating) return;
 
     _controller.clear();
     setState(() {
-      _history.add(
-        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
-      );
+      _history.add(ChatMessage(
+          role: 'user', content: text, timestamp: DateTime.now()));
       _isGenerating = true;
       _streamingBuffer = '';
+      _sources = const [];
     });
     _scrollToBottom();
 
+    // History BEFORE the current message: passing it in both `history` and
+    // `userMessage` would duplicate the question and waste context tokens.
+    final past = _history.sublist(0, _history.length - 1);
+
     try {
-      final rag = ref.read(ragServiceProvider);
-      final llm = ref.read(llmServiceProvider);
-
-      // Skip RAG only for pure greetings and acknowledgements. A word-count
-      // heuristic was wrong in the direction that matters: "chest pain",
-      // "snake bite" and "bleeding badly" are two words and are exactly the
-      // queries that most need retrieval.
-      final chunks = _isSmallTalk(text)
-          ? <DocChunk>[]
-          : await rag.retrieve(text, topicFilter: widget.topicFilter);
-
-      // Pass only the history BEFORE the current user message.
-      // Previously, the filter bug passed the current user message in BOTH
-      // `history` and `userMessage`, duplicating it in the prompt and wasting
-      // ~50-200 context tokens per turn.
-      final pastHistory = _history.sublist(0, _history.length - 1);
-
-      final prompt = PromptBuilder.buildChatPrompt(
-        chunks: chunks,
-        history: pastHistory,
-        userMessage: text,
-      );
-
-      final buffer = StringBuffer();
-      await for (final token in llm.chat(prompt: prompt)) {
-        buffer.write(token);
-        // Batch UI updates to ~20 fps instead of per-token.
-        // Reduces setState from ~512 calls/response to ~25, cutting GC
-        // pressure by ~20× during inference.
-        _streamFlushTimer ??= Timer(const Duration(milliseconds: 50), () {
-          _streamFlushTimer = null;
-          if (mounted) {
-            setState(() => _streamingBuffer = buffer.toString());
-            _scrollToBottom();
-          }
-        });
+      final turns = ref.read(chatTurnServiceProvider);
+      await for (final event in turns.send(
+        text: text,
+        history: past,
+        topicFilter: widget.topicFilter,
+      )) {
+        switch (event) {
+          case TurnSources(:final chunks):
+            if (mounted) setState(() => _sources = chunks);
+          case TurnToken(:final text):
+            // Batch to ~20 fps: per-token setState means ~512 rebuilds an
+            // answer, and the GC pressure is measurable during inference.
+            _streamFlushTimer ??= Timer(const Duration(milliseconds: 50), () {
+              _streamFlushTimer = null;
+              if (mounted) {
+                setState(() => _streamingBuffer = text);
+                _scrollToBottom();
+              }
+            });
+          case TurnDone(:final answer):
+            _finish(answer);
+          case TurnRouted():
+            break;
+        }
       }
-
-      // Final flush after stream ends
-      _streamFlushTimer?.cancel();
-      _streamFlushTimer = null;
-
-      if (!mounted) return;
-      setState(() {
-        _history.add(
-          ChatMessage(
-            role: 'assistant',
-            content: buffer.toString(),
-            timestamp: DateTime.now(),
-          ),
-        );
-        _streamingBuffer = '';
-        _isGenerating = false;
-      });
     } catch (e) {
-      _streamFlushTimer?.cancel();
-      _streamFlushTimer = null;
-      if (!mounted) return;
-      setState(() {
-        _history.add(
-          ChatMessage(
-            role: 'assistant',
-            content: 'Error: ${e.toString()}',
-            timestamp: DateTime.now(),
-          ),
-        );
-        _streamingBuffer = '';
-        _isGenerating = false;
-      });
+      // Never a bare stack trace: someone reading this may be in an emergency.
+      _finish('Something went wrong: $e\n\nIn a life-threatening emergency '
+          'call 112. You can also open the guides from the home screen.');
     }
     _scrollToBottom();
   }
 
-  /// True for greetings and bare acknowledgements, where retrieval would only
-  /// inject irrelevant context for the model to parrot.
-  static bool _isSmallTalk(String text) {
-    final normalised = text
-        .toLowerCase()
-        .replaceAll(RegExp(r'[^a-z\s]'), '')
-        .trim();
-    return _smallTalk.contains(normalised);
+  /// Commit a finished answer and stop the streaming UI.
+  void _finish(String answer) {
+    _streamFlushTimer?.cancel();
+    _streamFlushTimer = null;
+    if (!mounted) return;
+    setState(() {
+      _history.add(ChatMessage(
+          role: 'assistant', content: answer, timestamp: DateTime.now()));
+      _streamingBuffer = '';
+      _isGenerating = false;
+    });
   }
-
-  static const _smallTalk = <String>{
-    'hi',
-    'hii',
-    'hello',
-    'hey',
-    'yo',
-    'namaste',
-    'namaskar',
-    'salaam',
-    'hi there',
-    'hello there',
-    'good morning',
-    'good evening',
-    'good afternoon',
-    'thanks',
-    'thank you',
-    'thank u',
-    'thx',
-    'ty',
-    'ok',
-    'okay',
-    'k',
-    'yes',
-    'no',
-    'yeah',
-    'yep',
-    'nope',
-    'haan',
-    'nahi',
-    'dhanyavaad',
-    'shukriya',
-    'bye',
-    'goodbye',
-    'test',
-    'testing',
-  };
 
   void _scrollToBottom() {
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -225,88 +163,37 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ),
         Expanded(
-          child: ListView.builder(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(16),
-            itemCount: _history.length + (_isGenerating ? 1 : 0),
-            itemBuilder: (context, index) {
-              if (index == _history.length) {
-                return MessageBubble(
-                  message: ChatMessage(
-                    role: 'assistant',
-                    content: _streamingBuffer,
-                    timestamp: DateTime.now(),
-                  ),
-                  isStreaming: true,
-                );
-              }
-              return MessageBubble(message: _history[index]);
-            },
-          ),
+          child: _history.isEmpty && !_isGenerating
+              ? ChatEmptyState(onPickTopic: _send)
+              : ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.all(16),
+                  itemCount: _history.length + (_isGenerating ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _history.length) {
+                      return MessageBubble(
+                        message: ChatMessage(
+                          role: 'assistant',
+                          content: _streamingBuffer,
+                          timestamp: DateTime.now(),
+                        ),
+                        isStreaming: true,
+                      );
+                    }
+                    return MessageBubble(message: _history[index]);
+                  },
+                ),
         ),
-        _InputBar(
+        // Six seconds pass before the first token on this hardware. Naming the
+        // guide being read turns that into evidence the answer is grounded.
+        if (_isGenerating && _streamingBuffer.isEmpty)
+          RetrievalStatus(chunks: _sources),
+        ChatInputBar(
           controller: _controller,
           enabled: llmReady && !_isGenerating,
-          onSend: _sendMessage,
+          onSend: () => _send(_controller.text.trim()),
         ),
       ],
-    );
-  }
-}
-
-class _InputBar extends StatelessWidget {
-  final TextEditingController controller;
-  final bool enabled;
-  final VoidCallback onSend;
-
-  const _InputBar({
-    required this.controller,
-    required this.enabled,
-    required this.onSend,
-  });
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.fromLTRB(12, 8, 8, 12),
-      decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface,
-        border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
-      ),
-      child: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: TextField(
-                controller: controller,
-                enabled: enabled,
-                maxLines: null,
-                textInputAction: TextInputAction.send,
-                onSubmitted: (_) => onSend(),
-                decoration: InputDecoration(
-                  hintText: enabled
-                      ? 'Ask a survival question…'
-                      : 'Loading AI…',
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(24),
-                  ),
-                  contentPadding: const EdgeInsets.symmetric(
-                    horizontal: 16,
-                    vertical: 10,
-                  ),
-                  isDense: true,
-                ),
-              ),
-            ),
-            const SizedBox(width: 8),
-            IconButton.filled(
-              onPressed: enabled ? onSend : null,
-              icon: const Icon(Icons.send),
-              tooltip: 'Send',
-            ),
-          ],
-        ),
-      ),
     );
   }
 }

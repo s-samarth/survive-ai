@@ -89,13 +89,17 @@ class Signals:
     """Everything the router needs to know about a query.
 
     Attributes:
-        confidence: Top retrieval cosine. 0.0 when no dense index exists.
+        confidence: Top retrieval cosine, or None when no dense index exists.
+            None means *unknown*, which is not the same as zero: a zero was
+            measured and justifies declining, whereas an unknown must not,
+            because refusing on absent evidence would turn away emergencies
+            on any build without the embedder.
         has_bridge_terms: True when the query uses romanised-Hindi vocabulary
             that maps into the corpus -- evidence of domain independent of
             the embedding, which cannot read transliteration.
     """
 
-    confidence: float = 0.0
+    confidence: float | None = None
     has_bridge_terms: bool = False
 
 
@@ -148,8 +152,14 @@ def route(
         The :class:`Route` to take.
     """
     confidence = signals.confidence
-    if looks_like_capability_question(query) and confidence < capability_veto:
-        return Route(CAPABILITY, confidence, "asks what the app does")
+    known = confidence if confidence is not None else 0.0
+
+    if looks_like_capability_question(query) and known < capability_veto:
+        return Route(CAPABILITY, known, "asks what the app does")
+    if confidence is None:
+        # No embedder on this build. Declining would rest on evidence we do
+        # not have, so answer and let the generation-side checks catch it.
+        return Route(ANSWER, known, "no confidence signal available")
     if confidence >= threshold:
         return Route(ANSWER, confidence, "retrieval confident")
     if signals.has_bridge_terms:
