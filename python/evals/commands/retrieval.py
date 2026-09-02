@@ -59,6 +59,18 @@ def cmd_eval(args: argparse.Namespace) -> int:
     configs = SWEEPS[args.sweep]() if args.sweep else [BASELINE]
     if args.dense:
         configs = [c.with_(use_dense_leg=True) for c in configs]
+    # Scoring the exported graph is the only way to know what the device gets:
+    # a quantised export is a different model, not a packaging detail.
+    overrides = {
+        k: v
+        for k, v in (
+            ("embed_model", getattr(args, "embed_model", None)),
+            ("embed_backend", getattr(args, "embed_backend", None)),
+        )
+        if v
+    }
+    if overrides:
+        configs = [c.with_(**overrides) for c in configs]
     reports = run_sweep(configs, goldset_path("retrieval"))
     print(full_text_report(reports))
 

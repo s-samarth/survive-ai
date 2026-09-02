@@ -22,11 +22,12 @@ from ..config import RetrievalConfig
 from ..corpus.models import Corpus
 from .bm25 import BM25Index, build_index
 from .citations import CitationPicker, build_picker
-from .expansion import expand, is_transliterated
+from .expansion import is_transliterated
 from .fusion import reciprocal_rank_fusion
+from .legs import run_legs
 from .rerank import RerankWeights, mmr_select, score_chunk
 from .results import RetrievedChunk, materialise
-from .tokenizer import index_terms, tokenize
+from .tokenizer import index_terms
 
 
 @dataclass(slots=True)
@@ -84,39 +85,6 @@ class Retriever:
                 terms += index_terms(parent.text)
         return terms
 
-    def _legs(self, query: str) -> tuple[list[list[str]], list[float]]:
-        """Run the enabled retrieval legs, returning rankings and RRF weights."""
-        cfg = self.config
-        rankings: list[list[str]] = []
-        weights: list[float] = []
-
-        literal = tokenize(query)
-        if cfg.use_literal_leg and literal:
-            hits = self._index.search(
-                [t for w in literal for t in _stems(w)], limit=cfg.leg_limit
-            )
-            rankings.append([doc for doc, _ in hits])
-            weights.append(cfg.literal_weight)
-
-        if cfg.use_expanded_leg:
-            added = expand(query, max_expansions=cfg.max_expansions)
-            if added:
-                terms = [t for w in literal + added for t in _stems(w)]
-                hits = self._index.search(terms, limit=cfg.leg_limit)
-                rankings.append([doc for doc, _ in hits])
-                weights.append(cfg.expanded_weight)
-
-        if self._dense is not None:
-            hits = self._dense.search(query, limit=cfg.leg_limit)
-            weight = cfg.dense_weight
-            if is_transliterated(query, self._vocabulary):
-                weight *= cfg.transliterated_dense_weight
-            if weight > 0:
-                rankings.append([doc for doc, _ in hits])
-                weights.append(weight)
-
-        return rankings, weights
-
     def retrieve(
         self, query: str, *, topic_hint: str | None = None, top_k: int | None = None
     ) -> list[RetrievedChunk]:
@@ -133,7 +101,13 @@ class Retriever:
         """
         cfg = self.config
         k = top_k or cfg.top_k
-        rankings, leg_weights = self._legs(query)
+        rankings, leg_weights = run_legs(
+            query,
+            cfg=cfg,
+            index=self._index,
+            dense=self._dense,
+            vocabulary=self._vocabulary,
+        )
         if not rankings:
             return []
         fused = reciprocal_rank_fusion(rankings, k=cfg.rrf_k, weights=leg_weights)
@@ -170,6 +144,34 @@ class Retriever:
             units, scores, q, corpus=self.corpus, config=self.config, picker=self._picker
         )
 
+    def dense_scores(self, query: str, *, limit: int) -> list[tuple[str, float]]:
+        """The dense leg alone as ``(unit_id, cosine)``, best first.
+
+        Exposed for the Dart parity fixture, which compares scores rather than
+        ranks. Ranks are the wrong thing to assert across two implementations:
+        cosines over one corpus cluster tightly enough that a 1e-7 float
+        difference reorders near-ties, so an ordering test would fail on
+        arithmetic that is correct. The score is the quantity being reproduced,
+        and it is what the fusion consumes.
+
+        Transliteration routing is honoured, so a romanised-Hindi query returns
+        nothing here exactly as it contributes nothing to the fusion.
+
+        Args:
+            query: The user's query.
+            limit: Maximum results to return.
+
+        Returns:
+            Ranked pairs, or an empty list when the dense leg does not run.
+        """
+        cfg = self.config
+        if self._dense is None:
+            return []
+        routed_out = cfg.dense_weight * cfg.transliterated_dense_weight <= 0
+        if routed_out and is_transliterated(query, self._vocabulary):
+            return []
+        return self._dense.search(query, limit=limit)
+
     def retrieve_ids(self, query: str, *, top_k: int | None = None) -> list[str]:
         """Ranked unit ids -- what the model's context is built from."""
         return [r.unit_id for r in self.retrieve(query, top_k=top_k)]
@@ -191,10 +193,3 @@ class Retriever:
     ) -> list[str]:
         """Rank the children covered by ``hits`` as a citation list."""
         return self._picker.rank([h.unit for h in hits], query, limit=limit)
-
-
-def _stems(word: str) -> list[str]:
-    """Local import shim so the module reads top-down without a cycle."""
-    from .tokenizer import stem_candidates
-
-    return stem_candidates(word)

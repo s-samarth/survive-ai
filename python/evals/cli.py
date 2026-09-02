@@ -22,6 +22,7 @@ from survive_rag.generation.prompt import MAX_CHUNK_CHARS
 
 from .commands.conversation import cmd_multiturn
 from .commands.generation import cmd_context, cmd_gen_eval, cmd_perf
+from .commands.parity import add_parser as add_parity_parser
 from .commands.retrieval import cmd_eval, cmd_validate
 from .commands.routing import add_parser as add_routing_parser
 from .sweeps import SWEEPS
@@ -47,6 +48,12 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate = sub.add_parser("eval", help="run the retrieval eval")
     evaluate.add_argument("--sweep", choices=sorted(SWEEPS), help="named A/B sweep")
     evaluate.add_argument("--dense", action="store_true", help="enable the dense leg")
+    evaluate.add_argument("--embed-model", help="embedding model key")
+    evaluate.add_argument(
+        "--embed-backend",
+        choices=("torch", "onnx"),
+        help="torch is the lab reference; onnx is the graph the device runs",
+    )
     evaluate.add_argument("--html", help="write an HTML report here")
     evaluate.add_argument("--json", help="write a machine-readable summary here")
     evaluate.add_argument("--strict", action="store_true", help="exit non-zero on gate fail")
@@ -94,6 +101,7 @@ def build_parser() -> argparse.ArgumentParser:
     context.set_defaults(func=cmd_context)
 
     add_routing_parser(sub)
+    add_parity_parser(sub)
     return parser
 
 

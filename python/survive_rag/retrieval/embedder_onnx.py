@@ -32,19 +32,37 @@ def _download(spec: ModelSpec) -> tuple[str, str]:
     """
     from huggingface_hub import hf_hub_download
 
+    repo = spec.onnx_repo or spec.repo_id
     tried: list[str] = []
     graph = ""
     for candidate in (spec.onnx_file, "model.onnx", "onnx/model_quantized.onnx"):
         try:
-            graph = hf_hub_download(spec.repo_id, candidate)
+            graph = hf_hub_download(repo, candidate)
+            _fetch_sidecar(repo, candidate)
             break
         except Exception as exc:  # noqa: BLE001 - a miss just means try the next name
             tried.append(f"{candidate}: {type(exc).__name__}")
     if not graph:
         raise FileNotFoundError(
-            f"{spec.repo_id} ships no ONNX export (tried {'; '.join(tried)})"
+            f"{repo} ships no ONNX export (tried {'; '.join(tried)})"
         )
     return graph, hf_hub_download(spec.repo_id, "tokenizer.json")
+
+
+def _fetch_sidecar(repo: str, candidate: str) -> None:
+    """Fetch a graph's external initializers, if it has any.
+
+    Large graphs keep their weights in a ``<name>_data`` file beside them,
+    which onnxruntime memory-maps by that exact name; a graph fetched without
+    it loads far enough to look healthy and fails at the first inference. Small
+    graphs have no sidecar, so a miss here is expected rather than an error.
+    """
+    from huggingface_hub import hf_hub_download
+
+    try:
+        hf_hub_download(repo, candidate + "_data")
+    except Exception:  # noqa: BLE001 - most graphs have no sidecar
+        return
 
 
 def _pool(hidden: np.ndarray, mask: np.ndarray, how: str) -> np.ndarray:
@@ -72,7 +90,13 @@ class OnnxEmbedder:
         graph, tokenizer_path = _download(self.spec)
         self._tokenizer = Tokenizer.from_file(tokenizer_path)
         self._tokenizer.enable_truncation(MAX_SEQUENCE)
-        self._tokenizer.enable_padding()
+        # Padding is deliberately NOT enabled. EmbeddingGemma's exported graph
+        # does not fully mask padded positions in its pooled output: the same
+        # text embedded alone and embedded beside a longer one comes back at
+        # cosine 0.998, not 1.0. Batching would therefore make a document's
+        # vector depend on which other documents happened to share its batch --
+        # an artifact that is not reproducible, and that a device can never
+        # reproduce at all, because a phone embeds exactly one query at a time.
         self._session = ort.InferenceSession(
             graph, providers=["CPUExecutionProvider"]
         )
@@ -97,11 +121,19 @@ class OnnxEmbedder:
         prefix = self.spec.query_prefix if is_query else self.spec.doc_prefix
         prepared = [prefix + t for t in texts] if prefix else list(texts)
 
+        wanted = self.spec.onnx_output or None
         chunks: list[np.ndarray] = []
-        for start in range(0, len(prepared), self.batch_size):
-            batch = prepared[start : start + self.batch_size]
-            encodings = self._tokenizer.encode_batch(batch)
-            outputs = self._session.run(None, self._feed(encodings))
+        # One row per pass, for the padding reason in __post_init__. Slower in
+        # the lab, and the only way the lab and the device compute the same
+        # thing.
+        for text in prepared:
+            encodings = [self._tokenizer.encode(text)]
+            outputs = self._session.run([wanted] if wanted else None, self._feed(encodings))
+            if wanted:
+                # The graph already pooled and projected; pooling again here
+                # would read the wrong tensor entirely.
+                chunks.append(outputs[0])
+                continue
             mask = np.array([e.attention_mask for e in encodings], dtype=np.int64)
             chunks.append(_pool(outputs[0], mask, self.spec.pooling))
 

@@ -34,9 +34,18 @@ def cache_dir(root: Path | None = None) -> Path:
     return path
 
 
-def _cache_path(model_key: str, dim: int, root: Path | None = None) -> Path:
-    """One cache file per model and vector width."""
-    return cache_dir(root) / f"{model_key}-{dim}.npz"
+def _cache_path(
+    model_key: str, dim: int, backend: str, root: Path | None = None
+) -> Path:
+    """One cache file per model, vector width and backend.
+
+    The backend belongs in the key. A quantised ONNX export is a different
+    model from the float one it came from, not a packaging detail: omitting it
+    let a run asked for ``--embed-backend onnx`` reuse cached PyTorch document
+    vectors and score them against ONNX queries, reporting a hybrid that no
+    device will ever run.
+    """
+    return cache_dir(root) / f"{model_key}-{dim}-{backend}.npz"
 
 
 def _load_cache(path: Path) -> dict[str, np.ndarray]:
@@ -105,8 +114,8 @@ def build_dense_index(
     Returns:
         A populated :class:`DenseIndex`.
     """
-    spec_key = embedder.spec.key
-    path = _cache_path(spec_key, embedder.dim, root)
+    backend = "onnx" if type(embedder).__name__ == "OnnxEmbedder" else "torch"
+    path = _cache_path(embedder.spec.key, embedder.dim, backend, root)
     table = _load_cache(path) if use_cache else {}
 
     keys = [getattr(u, "content_sha", "") or _sha(u.text) for u in units]

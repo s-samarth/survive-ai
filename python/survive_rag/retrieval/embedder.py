@@ -12,9 +12,9 @@ artifact, so a device only ever embeds the query: one forward pass over ~10
 tokens, not a generation pass. That is why a dense leg is affordable here at
 all despite the 4 GB memory budget.
 
-Prefixes are not cosmetic. E5 and BGE are trained with asymmetric
-``query:``/``passage:`` markers and lose real accuracy without them, so each
-model carries its own in :data:`MODELS` rather than callers remembering.
+Which models exist, and the prefixes they expect, live in
+:mod:`survive_rag.retrieval.embedder_specs`; this module is only about running
+one.
 """
 
 from __future__ import annotations
@@ -24,84 +24,9 @@ from typing import Any, Protocol
 
 import numpy as np
 
-TORCH, ONNX = "torch", "onnx"
+from .embedder_specs import MODELS, ONNX, TORCH, ModelSpec
 
-
-@dataclass(frozen=True, slots=True)
-class ModelSpec:
-    """Everything needed to use one embedding model correctly.
-
-    Attributes:
-        key: Short name used in configs and reports.
-        repo_id: Hugging Face repository.
-        dim: Native embedding width.
-        params_m: Approximate parameter count in millions, for the size table.
-        query_prefix: Text prepended to queries, if the model expects one.
-        doc_prefix: Text prepended to documents, if the model expects one.
-        matryoshka: True when the vector may be truncated without retraining.
-        multilingual: True when the model was trained beyond English.
-        pooling: How token vectors become a sentence vector. E5 and MiniLM
-            mean-pool; BGE reads the CLS token. Getting this wrong silently
-            produces plausible but much worse vectors.
-        onnx_file: Path of the exported graph inside the repository.
-    """
-
-    key: str
-    repo_id: str
-    dim: int
-    params_m: int
-    query_prefix: str = ""
-    doc_prefix: str = ""
-    matryoshka: bool = False
-    multilingual: bool = False
-    pooling: str = "mean"
-    onnx_file: str = "onnx/model.onnx"
-
-
-MODELS: dict[str, ModelSpec] = {
-    "minilm": ModelSpec(
-        key="minilm",
-        repo_id="sentence-transformers/all-MiniLM-L6-v2",
-        dim=384,
-        params_m=22,
-    ),
-    "bge-small": ModelSpec(
-        key="bge-small",
-        repo_id="BAAI/bge-small-en-v1.5",
-        dim=384,
-        params_m=33,
-        query_prefix="Represent this sentence for searching relevant passages: ",
-        pooling="cls",
-    ),
-    "e5-small": ModelSpec(
-        key="e5-small",
-        repo_id="intfloat/multilingual-e5-small",
-        dim=384,
-        params_m=118,
-        query_prefix="query: ",
-        doc_prefix="passage: ",
-        multilingual=True,
-    ),
-    "e5-base": ModelSpec(
-        key="e5-base",
-        repo_id="intfloat/multilingual-e5-base",
-        dim=768,
-        params_m=278,
-        query_prefix="query: ",
-        doc_prefix="passage: ",
-        multilingual=True,
-    ),
-    "embeddinggemma": ModelSpec(
-        key="embeddinggemma",
-        repo_id="google/embeddinggemma-300m",
-        dim=768,
-        params_m=308,
-        query_prefix="task: search result | query: ",
-        doc_prefix="title: none | text: ",
-        matryoshka=True,
-        multilingual=True,
-    ),
-}
+__all__ = ["MODELS", "ONNX", "TORCH", "Embedder", "ModelSpec", "load_embedder"]
 
 
 class Embedder(Protocol):

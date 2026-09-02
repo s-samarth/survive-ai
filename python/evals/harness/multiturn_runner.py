@@ -12,7 +12,11 @@ import time
 from dataclasses import dataclass
 from typing import Any
 
-from survive_rag.generation.prompt import ContextChunk, build_chat_prompt, estimate_tokens
+from survive_rag.generation.prompt import (
+    ContextChunk,
+    build_chat_prompt,
+    estimate_tokens,
+)
 from survive_rag.retrieval.conversation import ANCHORED, retrieval_query
 from survive_rag.retrieval.pipeline import Retriever
 
