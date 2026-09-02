@@ -55,8 +55,8 @@ jobs:
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 
-  retrieval-eval:
-    name: Retrieval eval
+  evals:
+    name: Evals (lexical path)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -83,14 +83,21 @@ jobs:
       - name: Validate golden sets
         run: python -m evals validate
 
-      # Runs the lexical path only. The dense leg and the generation eval both
-      # need model downloads, which do not belong in a per-push job; they are
-      # run in the lab and their results are recorded in python/README.md.
+      # Everything below runs the lexical path only. The dense leg, the
+      # generation eval and the perf numbers all need model downloads, which do
+      # not belong in a per-push job; they are run in the lab and recorded in
+      # python/README.md.
       - name: Retrieval eval
         run: python -m evals eval --html reports/eval.html
+
+      - name: Multi-turn eval
+        run: python -m evals multiturn --no-dense
+
+      - name: Context window utilisation
+        run: python -m evals context --no-dense -n 60
 
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: retrieval-eval-report
+          name: eval-report
           path: python/reports/eval.html

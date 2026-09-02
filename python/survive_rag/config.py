@@ -64,7 +64,7 @@ class RetrievalConfig:
     use_literal_leg: bool = True
     use_expanded_leg: bool = True
     use_dense_leg: bool = False
-    embed_model: str = "e5-base"
+    embed_model: str = "embeddinggemma"
     embed_backend: str = "torch"
     embed_dim: int | None = None
     max_expansions: int = 10
@@ -104,5 +104,10 @@ class RetrievalConfig:
 # from the defaults only because ``use_dense_leg`` pulls in numpy and an
 # embedding model, which the zero-dependency lexical path does not need.
 #
-# Retrieval eval, 346 cases: Recall@5 0.888, Recall@20 0.979, MRR 0.735.
+# Retrieval eval, 346 cases: Recall@5 0.897, Recall@20 0.979, MRR 0.767,
+# citation Recall@5 0.849.
+#
+# EmbeddingGemma-300m is gated on Hugging Face, which is why the dense leg is
+# off in the plain defaults: the lexical path must keep working for anyone who
+# has not accepted the licence, and for the CI job that installs nothing.
 RECOMMENDED = RetrievalConfig(name="recommended", use_dense_leg=True)
