@@ -11,12 +11,12 @@ from collections import Counter
 
 import pytest
 
+from evals.harness.goldset import GoldCase, GoldSet, validate
+from evals.harness.metrics import evaluate_case, ndcg_at_k, recall_at_k
+from evals.harness.spans import CaseMatcher, Span, resolve, unresolved
 from survive_rag.corpus.chunker import ChunkConfig
 from survive_rag.corpus.loader import load_corpus
 from survive_rag.corpus.models import Corpus
-from survive_rag.evals.goldset import GoldCase, GoldSet, validate
-from survive_rag.evals.metrics import evaluate_case, ndcg_at_k, recall_at_k
-from survive_rag.evals.spans import CaseMatcher, Span, resolve, unresolved
 
 MIN_CASES = 250
 MIN_PER_SLICE = 3

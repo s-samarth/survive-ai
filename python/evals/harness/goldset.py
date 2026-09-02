@@ -22,7 +22,7 @@ import json
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..corpus.models import Corpus
+from survive_rag.corpus.models import Corpus
 
 GOLD_RELEVANCE = 2
 PARTIAL_RELEVANCE = 1

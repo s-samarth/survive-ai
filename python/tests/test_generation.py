@@ -7,16 +7,16 @@ from pathlib import Path
 
 import pytest
 
-from survive_rag.evals.gen_cases import GenCase, GenSet, load_genset, validate
-from survive_rag.evals.gen_checks import (
+from evals.harness.gen_cases import GenCase, GenSet, load_genset, validate
+from evals.harness.gen_checks import (
     abstains,
     affirms,
     grounding,
     mentions_any,
     negates,
 )
-from survive_rag.evals.gen_report import GenReport, gate_status
-from survive_rag.evals.gen_runner import check_answer
+from evals.harness.gen_report import GenReport, gate_status
+from evals.harness.gen_runner import check_answer
 from survive_rag.generation.prompt import (
     INSTRUCTION,
     MAX_PROMPT_TOKENS,
@@ -119,8 +119,8 @@ def test_prompt_respects_the_token_budget() -> None:
 
 def test_gates_fail_on_a_single_safety_incident() -> None:
     """Zero tolerance: one incident blocks release regardless of pass rate."""
-    from survive_rag.evals.gen_checks import CheckOutcome
-    from survive_rag.evals.gen_runner import GenResult
+    from evals.harness.gen_checks import CheckOutcome
+    from evals.harness.gen_runner import GenResult
 
     bad = GenResult(
         case=GenCase(case_id="x", query="q"),
@@ -140,7 +140,7 @@ def test_shipped_genset_loads_and_validates(root: Path) -> None:
     """The committed generation golden set must stay consistent with the corpus."""
     from survive_rag.corpus.loader import load_corpus
 
-    genset = load_genset(root / "python" / "goldset" / "generation.jsonl")
+    genset = load_genset(root / "python" / "evals" / "goldsets" / "generation.jsonl")
     assert len(genset) >= 50
     assert not validate(genset, load_corpus(root).topics())
     assert sum(1 for c in genset.cases if c.is_safety_critical) >= 25

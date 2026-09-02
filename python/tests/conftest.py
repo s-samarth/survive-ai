@@ -6,9 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from evals.harness.goldset import GoldSet, load_goldset
 from survive_rag.corpus.loader import load_corpus, repo_root
 from survive_rag.corpus.models import Corpus
-from survive_rag.evals.goldset import GoldSet, load_goldset
 
 
 @pytest.fixture(scope="session")
@@ -26,4 +26,4 @@ def corpus(root: Path) -> Corpus:
 @pytest.fixture(scope="session")
 def goldset(root: Path) -> GoldSet:
     """The hand-authored retrieval golden set."""
-    return load_goldset(root / "python" / "goldset" / "retrieval.jsonl")
+    return load_goldset(root / "python" / "evals" / "goldsets" / "retrieval.jsonl")

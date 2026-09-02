@@ -6,9 +6,9 @@ knobs at once and leaving the result uninterpretable.
 
 from __future__ import annotations
 
-from .config import RetrievalConfig
-from .corpus.chunker import ChunkConfig
-from .corpus.passages import PassageConfig
+from survive_rag.config import RetrievalConfig
+from survive_rag.corpus.chunker import ChunkConfig
+from survive_rag.corpus.passages import PassageConfig
 
 BASELINE = RetrievalConfig(name="baseline")
 

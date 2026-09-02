@@ -17,7 +17,8 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import NamedTuple
 
-from ..corpus.models import Corpus
+from survive_rag.corpus.models import Corpus
+
 from .goldset import GOLD_RELEVANCE, PARTIAL_RELEVANCE, GoldCase, GoldSet
 
 # A retrieved chunk covers a gold span when it contains at least this much of

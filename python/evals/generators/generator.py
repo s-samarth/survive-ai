@@ -12,6 +12,7 @@ harness and for comparing candidates.
 
 from __future__ import annotations
 
+from collections.abc import Iterator
 from dataclasses import dataclass, field
 from typing import Any, Protocol
 
@@ -37,23 +38,17 @@ class GeneratorSpec:
     shipped: bool = False
 
 
+def _spec(key: str, repo_id: str, params_b: float, **kw: Any) -> GeneratorSpec:
+    """Shorthand for the registry below."""
+    return GeneratorSpec(key=key, repo_id=repo_id, params_b=params_b, **kw)
+
+
 GENERATORS: dict[str, GeneratorSpec] = {
-    "gemma-2b": GeneratorSpec(
-        key="gemma-2b", repo_id="google/gemma-2-2b-it", params_b=2.6,
-        gated=True, shipped=True,
-    ),
-    "qwen-0.5b": GeneratorSpec(
-        key="qwen-0.5b", repo_id="Qwen/Qwen2.5-0.5B-Instruct", params_b=0.5
-    ),
-    "qwen-1.5b": GeneratorSpec(
-        key="qwen-1.5b", repo_id="Qwen/Qwen2.5-1.5B-Instruct", params_b=1.5
-    ),
-    "qwen-3b": GeneratorSpec(
-        key="qwen-3b", repo_id="Qwen/Qwen2.5-3B-Instruct", params_b=3.1
-    ),
-    "smollm-1.7b": GeneratorSpec(
-        key="smollm-1.7b", repo_id="HuggingFaceTB/SmolLM2-1.7B-Instruct", params_b=1.7
-    ),
+    "gemma-2b": _spec("gemma-2b", "google/gemma-2-2b-it", 2.6, gated=True, shipped=True),
+    "qwen-0.5b": _spec("qwen-0.5b", "Qwen/Qwen2.5-0.5B-Instruct", 0.5),
+    "qwen-1.5b": _spec("qwen-1.5b", "Qwen/Qwen2.5-1.5B-Instruct", 1.5),
+    "qwen-3b": _spec("qwen-3b", "Qwen/Qwen2.5-3B-Instruct", 3.1),
+    "smollm-1.7b": _spec("smollm-1.7b", "HuggingFaceTB/SmolLM2-1.7B-Instruct", 1.7),
 }
 
 
@@ -64,6 +59,10 @@ class Generator(Protocol):
 
     def generate(self, prompt: str) -> str:
         """Return the model's answer to ``prompt``."""
+        ...
+
+    def stream(self, prompt: str) -> Iterator[str]:
+        """Yield the answer in pieces; optional, enables TTFT measurement."""
         ...
 
 
@@ -122,28 +121,63 @@ class HuggingFaceGenerator:
         model.eval()
         self._pipe = (tokenizer, model, device)
 
+    def _encode(self, prompt: str) -> Any:
+        """Apply the model's chat template and move the tensors to its device."""
+        tokenizer, _, device = self._pipe
+        text = tokenizer.apply_chat_template(
+            [{"role": "user", "content": prompt}],
+            tokenize=False,
+            add_generation_prompt=True,
+        )
+        return tokenizer(text, return_tensors="pt").to(device)
+
+    def _kwargs(self) -> dict[str, Any]:
+        """Sampling settings, mirroring the app's temp=0.7 / top_k=40."""
+        tokenizer = self._pipe[0]
+        return {
+            "max_new_tokens": self.max_new_tokens,
+            "do_sample": self.temperature > 0,
+            "temperature": self.temperature,
+            "top_k": self.top_k,
+            "pad_token_id": tokenizer.eos_token_id,
+        }
+
     def generate(self, prompt: str) -> str:
         """Generate one answer with the app's sampling settings."""
         import torch
 
-        tokenizer, model, device = self._pipe
-        chat = [{"role": "user", "content": prompt}]
-        text = tokenizer.apply_chat_template(
-            chat, tokenize=False, add_generation_prompt=True
-        )
-        inputs = tokenizer(text, return_tensors="pt").to(device)
+        tokenizer, model = self._pipe[0], self._pipe[1]
+        inputs = self._encode(prompt)
         with torch.no_grad():
-            out = model.generate(
-                **inputs,
-                max_new_tokens=self.max_new_tokens,
-                do_sample=self.temperature > 0,
-                temperature=self.temperature,
-                top_k=self.top_k,
-                pad_token_id=tokenizer.eos_token_id,
-            )
+            out = model.generate(**inputs, **self._kwargs())
         return tokenizer.decode(
             out[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True
         ).strip()
+
+    def stream(self, prompt: str) -> Iterator[str]:
+        """Yield the answer in pieces, so time-to-first-token is measurable.
+
+        Generation runs on a worker thread because ``model.generate`` blocks
+        until it is finished; the streamer is the only way to observe when the
+        first token actually appeared rather than inferring it afterwards.
+        """
+        from threading import Thread
+
+        from transformers import TextIteratorStreamer
+
+        tokenizer, model = self._pipe[0], self._pipe[1]
+        inputs = self._encode(prompt)
+        streamer = TextIteratorStreamer(
+            tokenizer, skip_prompt=True, skip_special_tokens=True
+        )
+        thread = Thread(
+            target=model.generate, kwargs={**inputs, **self._kwargs(), "streamer": streamer}
+        )
+        thread.start()
+        try:
+            yield from streamer
+        finally:
+            thread.join()
 
 
 def load_generator(key: str, **kwargs: Any) -> Generator:

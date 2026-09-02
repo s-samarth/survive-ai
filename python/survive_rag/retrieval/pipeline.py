@@ -54,6 +54,11 @@ class Retriever:
             self._dense = self._build_dense()
         self._picker = build_picker(self.corpus, self.config)
 
+    @property
+    def vocabulary(self) -> frozenset[str]:
+        """Every term indexed from the corpus; used to spot bridge words."""
+        return self._vocabulary
+
     def _build_dense(self) -> Any:
         """Embed every unit, reusing the on-disk vector cache."""
         from .dense import build_dense_index
@@ -133,7 +138,6 @@ class Retriever:
         rankings, leg_weights = self._legs(query)
         if not rankings:
             return []
-
         fused = reciprocal_rank_fusion(rankings, k=cfg.rrf_k, weights=leg_weights)
         if not cfg.rerank:
             picked = [(self.corpus.unit(uid), s) for uid, s in fused[:k]]

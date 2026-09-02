@@ -73,7 +73,7 @@ jobs:
         run: pip install pytest ruff
 
       - name: Lint
-        run: ruff check survive_rag tests --line-length 100
+        run: ruff check survive_rag evals tests --line-length 100
 
       - name: Unit tests
         run: python -m pytest tests -q
@@ -81,13 +81,13 @@ jobs:
       # Fails the build if a guide edit invalidated a hand-authored label in
       # either golden set, which would otherwise silently depress every score.
       - name: Validate golden sets
-        run: python -m survive_rag validate
+        run: python -m evals validate
 
       # Runs the lexical path only. The dense leg and the generation eval both
       # need model downloads, which do not belong in a per-push job; they are
       # run in the lab and their results are recorded in python/README.md.
       - name: Retrieval eval
-        run: python -m survive_rag eval --html reports/eval.html
+        run: python -m evals eval --html reports/eval.html
 
       - uses: actions/upload-artifact@v4
         if: always()

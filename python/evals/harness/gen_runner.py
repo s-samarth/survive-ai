@@ -16,9 +16,10 @@ from __future__ import annotations
 import time
 from dataclasses import dataclass
 
-from ..generation.generator import Generator
-from ..generation.prompt import ContextChunk, build_chat_prompt
-from ..retrieval.pipeline import Retriever
+from evals.generators.generator import Generator
+from survive_rag.generation.prompt import ContextChunk, build_chat_prompt
+from survive_rag.retrieval.pipeline import Retriever
+
 from .gen_cases import GenCase, GenSet
 from .gen_checks import CheckOutcome, abstains, affirms, grounding, mentions_any, negates
 from .gen_report import GenReport

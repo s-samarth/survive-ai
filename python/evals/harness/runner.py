@@ -6,10 +6,11 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..config import RetrievalConfig
-from ..corpus.loader import load_corpus
-from ..corpus.models import Corpus
-from ..retrieval.pipeline import Retriever
+from survive_rag.config import RetrievalConfig
+from survive_rag.corpus.loader import load_corpus
+from survive_rag.corpus.models import Corpus
+from survive_rag.retrieval.pipeline import Retriever
+
 from .goldset import GoldSet, load_goldset, validate
 from .metrics import METRIC_FIELDS, CaseResult, aggregate, evaluate_case
 from .spans import resolve, unresolved

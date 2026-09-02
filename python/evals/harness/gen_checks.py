@@ -23,7 +23,7 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-from ..retrieval.tokenizer import index_terms
+from survive_rag.retrieval.tokenizer import index_terms
 
 # Two kinds of polarity flip, because they behave differently in a sentence.
 #

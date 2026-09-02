@@ -4,15 +4,15 @@ from __future__ import annotations
 
 from pathlib import Path
 
+from evals.harness.report import full_text_report, gate_status, scorecard
+from evals.harness.report_html import render_html
+from evals.harness.runner import run_sweep
+from evals.sweeps import SWEEPS
 from survive_rag.config import RetrievalConfig
-from survive_rag.evals.report import full_text_report, gate_status, scorecard
-from survive_rag.evals.report_html import render_html
-from survive_rag.evals.runner import run_sweep
-from survive_rag.sweeps import SWEEPS
 
 
 def _reports(root: Path, configs: list[RetrievalConfig]):
-    return run_sweep(configs, root / "python" / "goldset" / "retrieval.jsonl", root)
+    return run_sweep(configs, root / "python" / "evals" / "goldsets" / "retrieval.jsonl", root)
 
 
 def test_sweep_produces_one_report_per_config(root: Path) -> None:
