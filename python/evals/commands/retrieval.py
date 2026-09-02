@@ -8,6 +8,7 @@ from pathlib import Path
 
 from survive_rag.corpus.loader import load_corpus
 
+from ..harness.baselines import compare, load, regressions, render, save
 from ..harness.gen_cases import load_genset
 from ..harness.gen_cases import validate as validate_generation
 from ..harness.goldset import load_goldset, validate
@@ -75,5 +76,28 @@ def cmd_eval(args: argparse.Namespace) -> int:
             ),
             encoding="utf-8",
         )
+    exit_code = _record(reports[0].overall | {"n_units": reports[0].n_units}, args)
     passed, _ = gate_status(reports[0])
-    return 0 if (passed or not args.strict) else 1
+    if args.strict and not passed:
+        return 1
+    return exit_code
+
+
+def _record(metrics: dict, args) -> int:
+    """Save or compare against the recorded baseline, per the flags given.
+
+    Returns:
+        1 when ``--check-regressions`` was asked for and something regressed.
+    """
+    name = getattr(args, "baseline", None) or "retrieval"
+    if getattr(args, "save_baseline", False):
+        print(f"\nwrote baseline {save(name, metrics)}")
+        return 0
+    recorded = load(name)
+    if recorded is None:
+        return 0
+    deltas = compare(metrics, recorded)
+    print()
+    print(render(deltas, name))
+    worse = regressions(deltas)
+    return 1 if (worse and getattr(args, "check_regressions", False)) else 0

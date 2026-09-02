@@ -48,6 +48,13 @@ def build_parser() -> argparse.ArgumentParser:
     evaluate.add_argument("--html", help="write an HTML report here")
     evaluate.add_argument("--json", help="write a machine-readable summary here")
     evaluate.add_argument("--strict", action="store_true", help="exit non-zero on gate fail")
+    evaluate.add_argument("--baseline", help="snapshot name (default: retrieval)")
+    evaluate.add_argument(
+        "--save-baseline", action="store_true", help="record this run as the baseline"
+    )
+    evaluate.add_argument(
+        "--check-regressions", action="store_true", help="exit non-zero if a metric fell"
+    )
     evaluate.set_defaults(func=cmd_eval)
 
     gen = sub.add_parser("gen-eval", help="run the generation eval on one model")
