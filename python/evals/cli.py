@@ -10,6 +10,7 @@ good enough, and none of it belongs on a phone.
     multiturn   whether the system holds the thread across a conversation
     perf        time to first token, decode rate, total latency
     context     how much of the context window the prompt actually uses
+    route       answer / decline / capability routing, and its calibration
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from survive_rag.generation.prompt import MAX_CHUNK_CHARS
 from .commands.conversation import cmd_multiturn
 from .commands.generation import cmd_context, cmd_gen_eval, cmd_perf
 from .commands.retrieval import cmd_eval, cmd_validate
+from .commands.routing import add_parser as add_routing_parser
 from .sweeps import SWEEPS
 
 
@@ -90,6 +92,8 @@ def build_parser() -> argparse.ArgumentParser:
     )
     _add_retrieval_flags(context)
     context.set_defaults(func=cmd_context)
+
+    add_routing_parser(sub)
     return parser
 
 

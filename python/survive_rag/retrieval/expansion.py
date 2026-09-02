@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from .expansion_terms import EXPANSION_TERMS
 from .tokenizer import stem_candidates, tokenize
+from .transliteration import TRANSLITERATED
 
 MAX_EXPANSIONS = 10
 
@@ -43,28 +44,25 @@ def expanded_query(query: str, *, max_expansions: int = MAX_EXPANSIONS) -> str:
     return " ".join([*tokenize(query), *added])
 
 
-def transliterated_terms(query: str, vocabulary: frozenset[str]) -> list[str]:
-    """Query tokens that bridge into the corpus rather than appearing in it.
+def transliterated_terms(query: str, vocabulary: frozenset[str] = frozenset()) -> list[str]:
+    """Romanised-Hindi tokens in ``query``, in query order.
 
-    A romanised-Hindi token like ``khoon`` is a key in the expansion table but
-    occurs nowhere in the English guides; ``bleeding`` is a key *and* occurs.
-    That difference identifies transliteration with no extra list to maintain
-    and no language-detection model.
+    Read from the explicit :data:`TRANSLITERATED` list. An earlier version
+    inferred the set as "an expansion key absent from the corpus", which was
+    silently wrong for any Hinglish word a guide happens to use once --
+    ``aag`` being the dangerous example.
 
     Args:
         query: Raw user query.
-        vocabulary: Every term indexed from the corpus.
+        vocabulary: Unused; kept so callers need not change.
 
     Returns:
         The bridging tokens, in query order.
     """
-    return [
-        token
-        for token in tokenize(query)
-        if token in EXPANSION_TERMS and token not in vocabulary
-    ]
+    del vocabulary
+    return [token for token in tokenize(query) if token in TRANSLITERATED]
 
 
-def is_transliterated(query: str, vocabulary: frozenset[str]) -> bool:
+def is_transliterated(query: str, vocabulary: frozenset[str] = frozenset()) -> bool:
     """True when the query leans on romanised-Hindi vocabulary."""
     return bool(transliterated_terms(query, vocabulary))

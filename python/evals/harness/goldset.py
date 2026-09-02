@@ -11,6 +11,12 @@ Relevance is graded, not binary:
     ``gold``          -- relevance 2, the chunk that actually answers the query
     ``also_relevant`` -- relevance 1, genuinely useful but not the best answer
 
+Two kinds of case carry no gold at all, and they are not the same thing: a
+query the corpus cannot answer (tagged ``out_of_corpus``, which must be
+declined) and a question about the app itself (tagged ``capability``, which
+must be answered from a fixed description). Both retrieve nothing; only one is
+a refusal.
+
 Graded labels matter because several guides legitimately cover the same
 emergency, and a metric that calls the second-best chunk "wrong" punishes the
 retriever for being right.
@@ -55,6 +61,17 @@ class GoldCase:
     def is_out_of_corpus(self) -> bool:
         """True when the correct behaviour is to retrieve nothing."""
         return not self.gold
+
+    @property
+    def is_capability(self) -> bool:
+        """True when the user is asking what the app itself can do.
+
+        Also retrieves nothing, but wants a completely different response: a
+        description of the app rather than a refusal. Someone opening a
+        survival assistant for the first time asks this before they ask
+        anything else, so getting it wrong is the first impression.
+        """
+        return "capability" in self.slices
 
     def relevance(self, chunk_id: str) -> int:
         """Graded relevance of ``chunk_id`` for this case."""
@@ -141,6 +158,13 @@ def validate(goldset: GoldSet, corpus: Corpus) -> list[str]:
                 problems.append(f"{case.case_id}: unknown chunk id {chunk_id!r}")
         if case.topic and case.topic not in corpus.topics():
             problems.append(f"{case.case_id}: unknown topic {case.topic!r}")
-        if case.is_out_of_corpus and "out_of_corpus" not in case.slices:
-            problems.append(f"{case.case_id}: empty gold must be tagged out_of_corpus")
+        empty_ok = {"out_of_corpus", "capability"} & set(case.slices)
+        if case.is_out_of_corpus and not empty_ok:
+            problems.append(
+                f"{case.case_id}: empty gold must be tagged out_of_corpus or capability"
+            )
+        if case.is_capability and "out_of_corpus" in case.slices:
+            problems.append(
+                f"{case.case_id}: a capability question is not out of corpus"
+            )
     return problems

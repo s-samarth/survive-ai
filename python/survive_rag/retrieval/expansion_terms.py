@@ -20,6 +20,9 @@ EXPANSION_TERMS: dict[str, tuple[str, ...]] = {
     "bleeding": ("hemorrhage", "wound", "blood", "tourniquet", "pressure", "dressing"),
     "blood": ("bleeding", "hemorrhage", "wound", "tourniquet", "pressure"),
     "khoon": ("blood", "bleeding", "wound", "hemorrhage", "pressure"),
+    "baadh": ("flood", "flooding", "water", "evacuate", "rising"),
+    "chakkar": ("dizzy", "dizziness", "faint", "giddy", "heat", "collapse"),
+    "bheed": ("crowd", "crush", "stampede", "surge", "packed"),
     "cut": ("wound", "laceration", "bleeding", "bandage", "dressing"),
     "wound": ("bleeding", "infection", "bandage", "dressing", "tetanus"),
     "ghaav": ("wound", "injury", "bleeding", "dressing"),
@@ -187,3 +190,4 @@ EXPANSION_TERMS: dict[str, tuple[str, ...]] = {
     "safe": ("safety", "shelter", "secure", "protect"),
     "bachao": ("rescue", "save", "help", "emergency"),
 }
+

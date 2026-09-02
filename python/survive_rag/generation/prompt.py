@@ -28,6 +28,15 @@ RESERVED_OUTPUT_TOKENS = 512
 SAFETY_TOKENS = 84
 MAX_PROMPT_TOKENS = CONTEXT_TOKENS - RESERVED_OUTPUT_TOKENS - SAFETY_TOKENS
 
+# Appended only when reference material is present. Kept to one sentence:
+# the instruction sits ~60 tokens from the generation point precisely because
+# a 2B model stops attending to anything longer, so every clause added here
+# competes with the ones already earning their place.
+GROUNDING_CLAUSE = (
+    " Use the reference information above to answer. If it does not answer the "
+    "question, say plainly that your guides do not cover this — do not guess."
+)
+
 MAX_CHUNK_CHARS = 1400
 MAX_HISTORY_TURNS = 4
 # Held back from the reference block so history always has room.
@@ -172,7 +181,7 @@ def build_chat_prompt(
         if rendered:
             parts.append(rendered + "\n")
 
-    tail = INSTRUCTION + (" Use the reference information above to answer." if context else "")
+    tail = INSTRUCTION + (GROUNDING_CLAUSE if context else "")
     parts.append(tail + "\n")
     parts.append(f"Question: {user_message}")
     return "\n".join(parts)

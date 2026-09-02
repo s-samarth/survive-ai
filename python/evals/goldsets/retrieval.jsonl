@@ -367,3 +367,39 @@
 {"id":"oc-004","query":"best restaurants in bangalore","gold":[],"slices":["out_of_corpus","english"]}
 {"id":"oc-005","query":"how do I file my income tax return","gold":[],"slices":["out_of_corpus","english","india_specific"]}
 {"id":"oc-006","query":"cricket match score today","gold":[],"slices":["out_of_corpus","english","india_specific"]}
+{"id":"oo-007","query":"who won the world cup","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-008","query":"how do I invest in mutual funds","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-009","query":"translate this to spanish","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-010","query":"what is the weather tomorrow","topic":null,"slices":["out_of_corpus"],"note":"offline app, and not survival guidance"}
+{"id":"oo-011","query":"book me a train ticket to delhi","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-012","query":"how do I lose weight","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-013","query":"tell me a joke","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-014","query":"what are the symptoms of diabetes","topic":null,"slices":["out_of_corpus"],"note":"medical but chronic care, outside an emergency corpus"}
+{"id":"oo-015","query":"how do I apply for a passport","topic":null,"slices":["out_of_corpus","india_specific"]}
+{"id":"oo-016","query":"explain quantum computing","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-017","query":"what is the price of gold today","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-018","query":"help me write an email to my boss","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-019","query":"which phone should I buy","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-020","query":"how do I cook biryani","topic":null,"slices":["out_of_corpus","india_specific"],"note":"cooking, but not emergency food safety"}
+{"id":"oo-021","query":"what is the population of mumbai","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-022","query":"recommend a movie to watch","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-023","query":"how do I get a driving licence","topic":null,"slices":["out_of_corpus","india_specific"]}
+{"id":"oo-024","query":"solve 47 times 83","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-025","query":"who is the prime minister","topic":null,"slices":["out_of_corpus","india_specific"]}
+{"id":"oo-026","query":"my laptop wifi is not working","topic":null,"slices":["out_of_corpus"],"note":"near-miss: mentions connectivity, which the blackout guide covers, but is IT support"}
+{"id":"oo-027","query":"how do I improve my cibil score","topic":null,"slices":["out_of_corpus","india_specific"]}
+{"id":"oo-028","query":"suggest a workout plan","topic":null,"slices":["out_of_corpus"]}
+{"id":"oo-029","query":"kaunsa mobile lena chahiye","topic":null,"slices":["out_of_corpus","hinglish"]}
+{"id":"oo-030","query":"share bazaar ka kya haal hai","topic":null,"slices":["out_of_corpus","hinglish"]}
+{"id":"cap-001","query":"what can you do","topic":null,"slices":["capability"]}
+{"id":"cap-002","query":"how can you help me","topic":null,"slices":["capability"]}
+{"id":"cap-003","query":"who are you","topic":null,"slices":["capability"]}
+{"id":"cap-004","query":"what is this app","topic":null,"slices":["capability"]}
+{"id":"cap-005","query":"what topics do you cover","topic":null,"slices":["capability"]}
+{"id":"cap-006","query":"hello","topic":null,"slices":["capability"]}
+{"id":"cap-007","query":"hi there","topic":null,"slices":["capability"]}
+{"id":"cap-008","query":"namaste","topic":null,"slices":["capability","hinglish"]}
+{"id":"cap-009","query":"aap kya kar sakte ho","topic":null,"slices":["capability","hinglish"]}
+{"id":"cap-010","query":"what questions can I ask you","topic":null,"slices":["capability"]}
+{"id":"cap-011","query":"help","topic":null,"slices":["capability","terse"]}
+{"id":"cap-012","query":"tum kaun ho","topic":null,"slices":["capability","hinglish"]}

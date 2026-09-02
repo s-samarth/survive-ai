@@ -3,11 +3,10 @@
 Stages, in order:
 
     1. **Legs**   -- BM25 literal, BM25 expanded, and cosine over embeddings.
-    2. **Fusion** -- RRF merges the leg rankings without score normalisation,
-       which is what lets a cosine in [0,1] and a BM25 score in [0,30] be
-       combined at all.
+    2. **Fusion** -- RRF merges the rankings without score normalisation, which
+       is what lets a cosine in [0,1] and a BM25 score in [0,30] combine.
     3. **Rerank** -- heuristic features refine the fused top-N.
-    4. **MMR**    -- diversify so the model sees do *and* don't, not four don'ts.
+    4. **MMR**    -- diversify so the model sees do *and* don't.
     5. **Expand** -- units carry their parent section, under a token budget.
 
 Retrieval runs at ``config.granularity`` but every result still resolves to a
@@ -72,11 +71,10 @@ class Retriever:
         return build_dense_index(self._units, embedder)
 
     def _doc_terms(self, chunk: Any) -> list[str]:
-        """Terms for one unit, with heading text repeated as a field weight.
+        """Terms for one unit, heading text repeated as a field weight.
 
-        With ``index_parent_terms`` the unit also carries its parent section's
-        vocabulary, so a 25-token prohibition is still findable by a query that
-        words the situation the way its section does.
+        ``index_parent_terms`` additionally lends the parent's vocabulary, so a
+        short prohibition is findable by a query worded as its section is.
         """
         terms = index_terms(chunk.text)
         terms += index_terms(chunk.heading_path) * self.config.heading_boost
@@ -176,15 +174,17 @@ class Retriever:
         """Ranked unit ids -- what the model's context is built from."""
         return [r.unit_id for r in self.retrieve(query, top_k=top_k)]
 
-    def retrieve_citations(self, query: str, *, top_k: int | None = None) -> list[str]:
-        """Ranked child ids -- what a user actually clicks.
+    def confidence(self, query: str) -> float:
+        """Top embedding cosine for ``query``; 0.0 with no dense index.
 
-        Scored separately from :meth:`retrieve_ids`: a coarse unit wins
-        span-overlap recall trivially by covering more lines, while still
-        having to pick the right child to cite. This is the fair comparison.
+        This is the signal the router declines on. It separates cleanly on
+        this corpus where BM25 does not: in-corpus queries score 0.30-0.70,
+        out-of-corpus ones 0.09-0.23.
         """
-        k = top_k or self.config.top_k
-        return self.citations_for(self.retrieve(query, top_k=k), query, limit=k)
+        if self._dense is None:
+            return 0.0
+        hits = self._dense.search(query, limit=1)
+        return hits[0][1] if hits else 0.0
 
     def citations_for(
         self, hits: list[RetrievedChunk], query: str, *, limit: int = 5

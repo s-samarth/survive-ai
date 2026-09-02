@@ -1,14 +1,9 @@
-"""Run the generation eval: retrieve, prompt, generate, check.
+"""Run the generation eval: route, retrieve, prompt, generate, check.
 
-This is the half of the pipeline the retrieval eval cannot see. Retrieval
-tells you the answer was *available*; this tells you what the model did with
-it -- whether it kept the "DO NOT", whether it answered from the guides or
-from its own pretraining, and whether it invents an answer for a question the
-corpus does not cover.
-
-Safety failures are counted and listed separately, never averaged into a
-quality score. One answer in a hundred recommending a tourniquet is not a
-99% pass; it is an incident.
+Retrieval says the answer was *available*; this says what the model did with
+it. Safety failures are counted and listed separately, never averaged into a
+quality score: one answer in a hundred recommending a tourniquet is not a 99%
+pass, it is an incident.
 """
 
 from __future__ import annotations
@@ -19,27 +14,27 @@ from dataclasses import dataclass
 from evals.generators.generator import Generator
 from survive_rag.generation.prompt import ContextChunk, build_chat_prompt
 from survive_rag.retrieval.pipeline import Retriever
+from survive_rag.routing import ANSWER
 
 from .gen_cases import GenCase, GenSet
-from .gen_checks import CheckOutcome, abstains, affirms, grounding, mentions_any, negates
+from .gen_checks import (
+    CheckOutcome,
+    abstains,
+    affirms,
+    grounding,
+    mentions_any,
+    negates,
+)
 from .gen_report import GenReport
+from .gen_routing import canned_answer, route_query
 
 CHECK_NAMES = ("safety", "negation", "actionable", "grounded", "abstention")
 
 
 @dataclass(frozen=True, slots=True)
 class GenResult:
-    """Everything one case produced.
-
-    Attributes:
-        case: The case that was run.
-        answer: The model's raw answer.
-        context: The reference block the prompt carried.
-        citations: Child ids the retriever offered for this answer.
-        outcomes: One :class:`CheckOutcome` per applicable check.
-        grounding: Lexical grounding score, retained for the report.
-        seconds: Generation wall-clock, for the latency column.
-    """
+    """Everything one case produced: the answer, its context and citations,
+    one :class:`CheckOutcome` per applicable check, and the wall-clock."""
 
     case: GenCase
     answer: str
@@ -129,15 +124,25 @@ def check_answer(case: GenCase, answer: str, context: str) -> list[CheckOutcome]
 
 
 def run_generation(
-    genset: GenSet, retriever: Retriever, generator: Generator, *, top_k: int = 4
+    genset: GenSet,
+    retriever: Retriever,
+    generator: Generator,
+    *,
+    top_k: int = 4,
+    use_router: bool = True,
 ) -> GenReport:
     """Score one generator end to end on the generation golden set.
 
+    With ``use_router`` the pipeline is measured as it behaves in the app: an
+    unsupported query is declined before a model sees it. Turning it off
+    measures the model alone, which is what a bake-off wants.
+
     Args:
         genset: Loaded generation cases.
-        retriever: A configured retrieval pipeline; supplies the context.
+        retriever: Configured pipeline; supplies context and confidence.
         generator: The model under test.
-        top_k: Chunks to place in the prompt, matching the app's setting.
+        top_k: Chunks placed in the prompt, matching the app.
+        use_router: Route before generating, as the app does.
 
     Returns:
         A populated :class:`GenReport`.
@@ -145,6 +150,22 @@ def run_generation(
     started = time.perf_counter()
     results: list[GenResult] = []
     for case in genset.cases:
+        if use_router:
+            decision = route_query(case.query, retriever)
+            if decision.intent != ANSWER:
+                answer = canned_answer(decision.intent)
+                results.append(
+                    GenResult(
+                        case=case,
+                        answer=answer,
+                        context="",
+                        citations=(),
+                        outcomes=tuple(check_answer(case, answer, answer)),
+                        grounding=1.0,
+                        seconds=0.0,
+                    )
+                )
+                continue
         hits = retriever.retrieve(case.query, top_k=top_k)
         chunks = [
             ContextChunk(
