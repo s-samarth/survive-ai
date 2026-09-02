@@ -1,0 +1,8 @@
+{
+ "follow_up_recall": 0.700,
+ "generator": "gemma-2b",
+ "incidents": 3,
+ "recall_at_5": 0.688,
+ "strategy": "anchored",
+ "turn_1_recall": 0.667
+}

@@ -1,0 +1,12 @@
+{
+ "generator": "gemma-2b",
+ "hardware": "apple-silicon-laptop",
+ "median_decode_tps": 5.1,
+ "median_output_tokens": 88.5,
+ "median_prompt_tokens": 1296.5,
+ "median_total_s": 26.8,
+ "median_ttft_s": 6.1,
+ "p90_total_s": 49.4,
+ "p90_ttft_s": 6.9,
+ "top_k": 5
+}
