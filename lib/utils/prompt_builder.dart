@@ -23,6 +23,10 @@ class PromptBuilder {
   /// Max prompt tokens, derived from the model's configured context window.
   static const int _maxPromptTokens = kMaxPromptTokens;
 
+  /// Tokens held back for conversation history whenever there is any, so a
+  /// long reference block can never crowd out the thread of the conversation.
+  static const int _historyReserveTokens = 220;
+
   /// Short instruction placed RIGHT BEFORE the question (~60 tokens).
   ///
   /// On a 2B model, a long system prompt at the top of the context gets
@@ -70,15 +74,24 @@ class PromptBuilder {
     usedTokens += instructionTokens + userTokens;
 
     // 1. RAG context (placed first — reference material for the model to draw from)
-    final context = _buildContext(chunks);
-    if (context.isNotEmpty) {
-      final contextTokens = _estimateTokens(context) + 4;
-      if (usedTokens + contextTokens + 50 < _maxPromptTokens) {
-        buffer.writeln('Reference information from survival guides:');
-        buffer.writeln(context);
-        buffer.writeln();
-        usedTokens += contextTokens + 6;
-      }
+    //
+    // Fit as many chunks as the budget allows rather than accepting or
+    // rejecting the whole block. The previous all-or-nothing form failed
+    // silently and catastrophically: when the block did not fit, the model
+    // received NO reference material at all and answered from its own
+    // pretraining — the exact failure retrieval exists to prevent, and
+    // invisible to anything that does not inspect the prompt.
+    final selected = selectContextChunks(
+      chunks: chunks,
+      history: history,
+      userMessage: userMessage,
+    );
+    if (selected.isNotEmpty) {
+      final context = selected.map(_renderChunk).join('\n\n');
+      buffer.writeln('Reference information from survival guides:');
+      buffer.writeln(context);
+      buffer.writeln();
+      usedTokens += _estimateTokens(context) + 6;
     }
 
     // 2. Conversation history (middle — provides continuity)
@@ -92,7 +105,7 @@ class PromptBuilder {
     }
 
     // 3. Instruction — RIGHT BEFORE the question (where 2B model attends most)
-    if (context.isNotEmpty) {
+    if (selected.isNotEmpty) {
       buffer.writeln(
         '$_instruction Use the reference information above to answer.',
       );
@@ -138,27 +151,55 @@ class PromptBuilder {
     return 'Previous exchange:\n${lines.join('\n')}';
   }
 
-  /// Build the reference material block from retrieved chunks.
+  /// Per-chunk character cap.
   ///
-  /// Each chunk is capped at [_maxChunkChars] to leave room for the
-  /// instruction + question near the end of the prompt. Four chunks at the
-  /// old 1000-char cap alone exceeded the real context window.
-  static const int _maxChunkChars = 700;
+  /// 700 was tuned when a chunk was one ~90-token paragraph. Retrieval now
+  /// scores 320-token passages, and at 700 characters that truncated 91% of
+  /// them — discarding ~600 characters each while 39% of the token budget sat
+  /// unused. At 1400, truncation drops to 30% and five chunks fill 91% of the
+  /// budget.
+  static const int _maxChunkChars = 1400;
 
-  static String _buildContext(List<DocChunk> chunks) {
-    if (chunks.isEmpty) return '';
-    return chunks
-        .map((c) {
-          final source = c.headingPath.isNotEmpty
-              ? '${c.topic} > ${c.headingPath}'
-              : c.topic;
-          var body = c.body;
-          if (body.length > _maxChunkChars) {
-            body = '${body.substring(0, _maxChunkChars - 3)}...';
-          }
-          return '[$source]\n$body';
-        })
-        .join('\n\n');
+  /// The chunks that will actually fit in the prompt, best first.
+  ///
+  /// Exposed because citations must reflect what the model was actually shown:
+  /// a citation pointing at a chunk that never reached the context is a lie
+  /// about where the answer came from.
+  static List<DocChunk> selectContextChunks({
+    required List<DocChunk> chunks,
+    required List<ChatMessage> history,
+    required String userMessage,
+  }) {
+    if (chunks.isEmpty) return const [];
+
+    final overhead =
+        _estimateTokens(_instruction) + _estimateTokens(userMessage) + 5;
+    final reserve = history.isEmpty ? 0 : _historyReserveTokens;
+    final budget = _maxPromptTokens - overhead - reserve - 10;
+    if (budget <= 0) return const [];
+
+    final kept = <DocChunk>[];
+    var used = 0;
+    for (final chunk in chunks) {
+      final cost = _estimateTokens(_renderChunk(chunk)) + 2;
+      // The best chunk is always kept: an oversized one still beats nothing.
+      if (kept.isNotEmpty && used + cost > budget) break;
+      kept.add(chunk);
+      used += cost;
+    }
+    return kept;
+  }
+
+  /// Render one chunk as `[source]\nbody`, truncated to [_maxChunkChars].
+  static String _renderChunk(DocChunk c) {
+    final source = c.headingPath.isNotEmpty
+        ? '${c.topic} > ${c.headingPath}'
+        : c.topic;
+    var body = c.body;
+    if (body.length > _maxChunkChars) {
+      body = '${body.substring(0, _maxChunkChars - 3)}...';
+    }
+    return '[$source]\n$body';
   }
 
   /// Rough token estimate: words × 1.3 (same heuristic as ChunkerService).
