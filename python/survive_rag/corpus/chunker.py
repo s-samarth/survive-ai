@@ -19,7 +19,14 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-from .markdown_blocks import LIST, PARAGRAPH, TABLE, Block, parse_blocks, strip_list_marker
+from .markdown_blocks import (
+    LIST,
+    PARAGRAPH,
+    TABLE,
+    Block,
+    parse_blocks,
+    strip_list_marker,
+)
 from .models import ChildChunk, ParentChunk
 from .packing import estimate_tokens, is_prohibition, naming_block, pack
 from .slugify import child_id, content_sha, make_unique, parent_id, slugify

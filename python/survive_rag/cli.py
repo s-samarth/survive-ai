@@ -11,6 +11,7 @@ import argparse
 from pathlib import Path
 
 from .config import RECOMMENDED
+from .corpus.artifacts import build_artifacts
 from .corpus.loader import export_index, load_corpus
 from .retrieval.pipeline import Retriever
 
@@ -52,6 +53,21 @@ def cmd_query(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_pack(args: argparse.Namespace) -> int:
+    """Build every artifact the app ships, from one corpus and one model."""
+    written = build_artifacts(
+        Path(args.tokenizer),
+        Path(args.assets),
+        Path(args.fixture),
+        config=RECOMMENDED.with_(
+            embed_model=args.embed_model, embed_backend=args.embed_backend
+        ),
+    )
+    for name, path in written.items():
+        print(f"{name:16} {path}  ({path.stat().st_size // 1024} KB)")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """Construct the argument parser."""
     parser = argparse.ArgumentParser(prog="survive-rag", description=__doc__)
@@ -66,6 +82,20 @@ def build_parser() -> argparse.ArgumentParser:
     query.add_argument("-k", type=int, default=5, help="results to show")
     query.add_argument("--dense", action="store_true", help="enable the dense leg")
     query.set_defaults(func=cmd_query)
+
+    pack = sub.add_parser("pack", help="build every artifact the app ships")
+    pack.add_argument(
+        "--tokenizer", required=True, help="tokenizer.json for the embedding model"
+    )
+    pack.add_argument("--assets", default="../assets/index", help="app asset directory")
+    pack.add_argument(
+        "--fixture",
+        default="../test/fixtures/tokenizer_cases.json",
+        help="Dart tokeniser parity fixture",
+    )
+    pack.add_argument("--embed-model", default=RECOMMENDED.embed_model)
+    pack.add_argument("--embed-backend", default="onnx", choices=("torch", "onnx"))
+    pack.set_defaults(func=cmd_pack)
     return parser
 
 
