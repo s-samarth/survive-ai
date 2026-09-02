@@ -69,12 +69,22 @@ def load_corpus(
     return Corpus(children=children, parents=parents, passages=windows)
 
 
+def _without_text(row: dict) -> dict:
+    """Drop the joined body from a grouping row; its children carry it."""
+    return {k: v for k, v in row.items() if k != "text"}
+
+
 def export_index(corpus: Corpus, destination: Path) -> Path:
     """Write the chunked corpus as the artifact the Flutter app ships.
 
     Chunking happens once, here, at build time -- the app never parses
     markdown at runtime, so chunk ids (and therefore citations) are identical
     on every device and in every eval run.
+
+    Only children carry text. Passages and parents are groupings of children
+    and are stored as id lists, which the app joins on load: writing all three
+    verbatim tripled the artifact for no information, and this ships in an
+    APK where a megabyte is a real cost.
 
     Args:
         corpus: The chunked corpus.
@@ -85,12 +95,14 @@ def export_index(corpus: Corpus, destination: Path) -> Path:
     """
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = {
-        "schema": 1,
-        "parents": [p.to_json() for p in corpus.parents],
+        "schema": 2,
         "children": [c.to_json() for c in corpus.children],
-        "passages": [p.to_json() for p in corpus.passages],
+        "passages": [_without_text(p.to_json()) for p in corpus.passages],
+        "parents": [_without_text(p.to_json()) for p in corpus.parents],
     }
+    # No indent: this ships in an APK, and the file is machine-read.
     destination.write_text(
-        json.dumps(payload, ensure_ascii=False, indent=1), encoding="utf-8"
+        json.dumps(payload, ensure_ascii=False, separators=(",", ":")),
+        encoding="utf-8",
     )
     return destination

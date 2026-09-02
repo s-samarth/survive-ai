@@ -12,7 +12,7 @@ import '../models/doc_chunk.dart';
 /// - docs: document registry with sync state
 class DatabaseService {
   static const _dbName = 'survive_ai.db';
-  static const _dbVersion = 2;
+  static const _dbVersion = 3;
 
   Database? _db;
 
@@ -45,6 +45,24 @@ class DatabaseService {
       await db.execute('DROP TABLE IF EXISTS chunks');
       await db.execute('DROP TABLE IF EXISTS docs');
       await _onCreate(db, newVersion);
+      return;
+    }
+    // v2 -> v3: retrieval moved from citation-sized chunks to ~320-token
+    // passages, built offline by the Python indexer. `chunks` now holds
+    // passages and `citations` holds the paragraphs they were built from, so
+    // a link can still land on the sentence that answered the question. Every
+    // existing row was chunked under the old policy and its ids no longer
+    // mean anything, so the corpus is dropped and re-seeded from the bundled
+    // index on the next launch.
+    if (oldVersion < 3) {
+      for (final t in ['chunks_ai', 'chunks_ad', 'chunks_au']) {
+        await db.execute('DROP TRIGGER IF EXISTS $t');
+      }
+      await db.execute('DROP TABLE IF EXISTS citations');
+      await db.execute('DROP TABLE IF EXISTS chunks_fts');
+      await db.execute('DROP TABLE IF EXISTS chunks');
+      await db.execute('DROP TABLE IF EXISTS docs');
+      await _onCreate(db, newVersion);
     }
   }
 
@@ -71,6 +89,32 @@ class DatabaseService {
         embedding BLOB
       )
     ''');
+
+    // The paragraphs each passage was built from — what a citation points at.
+    //
+    // Retrieval scores passages because a 30-token prohibition holds too few
+    // terms to match on its own; a citation must still land on a paragraph the
+    // reader can be scrolled to. Ids are content-derived and produced by the
+    // Python indexer, so a link means the same thing in the app, in the guide
+    // reader and in an eval report.
+    await db.execute('''
+      CREATE TABLE citations (
+        id TEXT PRIMARY KEY,
+        chunk_id TEXT NOT NULL REFERENCES chunks(id) ON DELETE CASCADE,
+        doc_id TEXT NOT NULL,
+        topic TEXT NOT NULL,
+        heading_path TEXT NOT NULL DEFAULT '',
+        body TEXT NOT NULL,
+        line_start INTEGER NOT NULL DEFAULT 0,
+        line_end INTEGER NOT NULL DEFAULT 0,
+        ordinal INTEGER NOT NULL DEFAULT 0,
+        is_prohibition INTEGER NOT NULL DEFAULT 0
+      )
+    ''');
+
+    await db.execute(
+      'CREATE INDEX idx_citations_chunk ON citations(chunk_id)',
+    );
 
     // FTS5 index over `chunks`, declared as an EXTERNAL CONTENT table.
     //

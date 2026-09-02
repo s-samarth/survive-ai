@@ -40,10 +40,17 @@ __all__ = [
     "negates",
 ]
 
+# Refusal language, broad enough not to be tied to one wording.
+#
+# It was: the shipped refusal says "outside what I can help with", the pattern
+# required "outside my scope", and every correctly-declined query scored as a
+# failure to decline. `test_shipped_decline_text_reads_as_abstention` now
+# pins the two together.
 _ABSTENTION = re.compile(
     r"\b(i (don't|do not) (know|have)|not (covered|in|available)|no information|"
-    r"cannot (help|answer)|can't (help|answer)|outside (my|the) (scope|guides)|"
-    r"do not cover|don't cover|not something (i|the guides))\b",
+    r"cannot (help|answer)|can'?t help|outside (my|the|what)|do not cover|"
+    r"don't cover|not something (i|the guides)|won'?t guess|will not guess|"
+    r"only answer from|beyond what i)\b",
     re.IGNORECASE,
 )
 

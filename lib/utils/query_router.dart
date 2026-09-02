@@ -1,4 +1,4 @@
-import 'expansion_terms.dart';
+import 'transliteration.dart';
 
 /// What kind of question this is, decided before a model runs.
 enum QueryIntent {

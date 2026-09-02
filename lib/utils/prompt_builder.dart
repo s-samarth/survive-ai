@@ -1,5 +1,6 @@
 import '../models/chat_message.dart';
 import '../services/llm_service.dart';
+import 'prompt_history.dart';
 import '../models/doc_chunk.dart';
 
 /// Builds the prompt string for on-device Gemma 2B inference.
@@ -28,7 +29,6 @@ class PromptBuilder {
   static const int _historyReserveTokens = 220;
 
   /// Turns considered for history, newest first.
-  static const int maxHistoryTurns = 4;
 
   /// Short instruction placed RIGHT BEFORE the question (~60 tokens).
   ///
@@ -100,7 +100,7 @@ class PromptBuilder {
     // 2. Conversation history (middle — provides continuity)
     final remainingBudget = _maxPromptTokens - usedTokens;
     if (history.isNotEmpty && remainingBudget > 50) {
-      final historyText = _buildHistory(history, remainingBudget);
+      final historyText = PromptHistory.render(history, remainingBudget);
       if (historyText.isNotEmpty) {
         buffer.writeln(historyText);
         buffer.writeln();
@@ -121,57 +121,6 @@ class PromptBuilder {
     buffer.write('Question: $userMessage');
 
     return buffer.toString();
-  }
-
-  /// Longest a user's own question is allowed to be in history.
-  ///
-  /// Questions are short and load-bearing: "should I tie something above it"
-  /// is what the next retrieval and the next answer both hang on.
-  static const int _maxUserChars = 400;
-
-  /// Longest a previous answer is allowed to be.
-  ///
-  /// Answers are long — a median of ~89 tokens — and recoverable: the model
-  /// can restate advice, but it cannot recover a question it never saw. So
-  /// they are cut harder than questions when the budget is tight.
-  static const int _maxAssistantChars = 220;
-
-  /// Build conversation history text, fitting within [maxTokens].
-  ///
-  /// Walks from the MOST RECENT backwards. The previous version filled
-  /// oldest-first and stopped at the budget, which kept the oldest turns and
-  /// dropped the newest — exactly backwards for a follow-up question, where
-  /// the last exchange is the one the current turn depends on.
-  ///
-  /// Uses Q:/A: instead of User:/Assistant: to avoid role confusion, since the
-  /// whole prompt sits inside a single `<start_of_turn>user` block.
-  static String _buildHistory(List<ChatMessage> history, int maxTokens) {
-    final recent = history.length > maxHistoryTurns
-        ? history.sublist(history.length - maxHistoryTurns)
-        : history;
-
-    final lines = <String>[];
-    var tokens = 5; // header
-
-    for (final msg in recent.reversed) {
-      final isUser = msg.role == 'user';
-      final cap = isUser ? _maxUserChars : _maxAssistantChars;
-      var content = msg.content;
-      if (content.length > cap) {
-        content = '${content.substring(0, cap - 3)}...';
-      }
-      final line = '${isUser ? 'Q' : 'A'}: $content';
-      final lineTokens = _estimateTokens(line);
-
-      // Always keep the most recent turn: a follow-up without it is
-      // unanswerable, and an oversized turn beats an absent one.
-      if (lines.isNotEmpty && tokens + lineTokens > maxTokens) break;
-      lines.add(line);
-      tokens += lineTokens;
-    }
-
-    if (lines.isEmpty) return '';
-    return 'Previous exchange:\n${lines.reversed.join('\n')}';
   }
 
   /// Per-chunk character cap.

@@ -69,6 +69,21 @@ def test_grounding_detects_an_answer_from_pretraining() -> None:
     assert grounding("Take two aspirin and consult a physician", context) < 0.2
 
 
+def test_shipped_decline_text_reads_as_abstention() -> None:
+    """The refusal the app actually sends must satisfy the abstention check.
+
+    It did not: the response says "outside what I can help with" while the
+    pattern required "outside my scope", so every correctly-declined query
+    scored as a failure to decline and abstention read 0%. Pinning the two
+    together stops that recurring silently.
+    """
+    from survive_rag.responses import capability_answer, decline_answer
+
+    assert abstains(decline_answer())
+    # A capability answer is not a refusal; it must not count as one.
+    assert not abstains(capability_answer())
+
+
 def test_abstains_recognises_a_refusal() -> None:
     """Out-of-corpus queries must be declined, not improvised."""
     assert abstains("I don't know, that is not covered in the survival guides.")

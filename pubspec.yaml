@@ -90,6 +90,11 @@ flutter:
     # Directory form: every guide in docs/survival_guides/ is bundled, so
     # adding a new DocTopic only means dropping in the matching .md file.
     - docs/survival_guides/
+    # Chunking runs offline in python/ and ships as an artifact, so chunk
+    # ids — and therefore citations — are identical on every device and in
+    # every eval run. Rebuild with:
+    #   python3 -m survive_rag chunk --export assets/index/corpus.json
+    - assets/index/corpus.json
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

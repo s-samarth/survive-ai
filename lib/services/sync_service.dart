@@ -10,7 +10,9 @@ import 'package:flutter/services.dart';
 import '../models/doc_manifest.dart';
 import '../models/doc_topic.dart';
 import '../models/doc_chunk.dart';
+import 'database_citations.dart';
 import 'database_service.dart';
+import 'index_loader_service.dart';
 import 'chunker_service.dart';
 import 'embedding_service.dart';
 
@@ -40,14 +42,22 @@ const kManifestUrl = String.fromEnvironment(
 class SyncService {
   final DatabaseService _db;
   final ChunkerService _chunker;
+
+  /// Reads the prebuilt index; falls back to [_chunker] when absent.
+  final IndexLoaderService _indexLoader;
   final EmbeddingService _embedder;
 
-  SyncService(this._db, this._chunker, this._embedder);
+  SyncService(
+    this._db,
+    this._chunker,
+    this._embedder, {
+    IndexLoaderService indexLoader = const IndexLoaderService(),
+  }) : _indexLoader = indexLoader;
 
   /// Version stamp for the bundled corpus. Bump this whenever the shipped
   /// Markdown changes so existing installs re-ingest on next launch instead of
   /// silently keeping stale chunks.
-  static const bundledVersion = 'bundled-2.0-in';
+  static const bundledVersion = 'bundled-3.0-index';
 
   /// Seeds the database with the bundled India guides if they are not already
   /// ingested at [bundledVersion].
@@ -58,15 +68,31 @@ class SyncService {
   /// behind the model download meant a sideloaded or pre-existing model left
   /// the corpus permanently empty.
   Future<void> seedFromAssets() async {
+    // Prefer the index built offline by the Python indexer: it carries the
+    // passage sizing the evals settled on and content-derived citation ids
+    // that mean the same thing here, in the guide reader and in a report.
+    // A build without the artifact still works through the runtime chunker.
+    final index = await _indexLoader.load();
+
     for (final topic in DocTopic.values) {
       if (await _db.getDocVersion(topic.docId) == bundledVersion) continue;
 
       try {
-        final content = await rootBundle.loadString(topic.assetPath);
-
         await _db.deleteChunksForDoc(topic.docId);
-        final chunks = _chunker.chunk(content, topic.docId, topic.key);
-        await _db.insertChunks(chunks);
+        await _db.deleteCitationsForDoc(topic.docId);
+
+        final indexed = index?[topic.key];
+        final List<DocChunk> chunks;
+        if (indexed != null) {
+          chunks = indexed.passages;
+          await _db.insertChunks(chunks);
+          await _db.insertCitations(indexed.citations);
+        } else {
+          final content = await rootBundle.loadString(topic.assetPath);
+          chunks = _chunker.chunk(content, topic.docId, topic.key);
+          await _db.insertChunks(chunks);
+        }
+
         await _db.upsertDoc({
           'id': topic.docId,
           'filename': p.basename(topic.assetPath),
