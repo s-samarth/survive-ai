@@ -11,8 +11,16 @@ import '../models/doc_chunk.dart';
 /// - chunks_fts: FTS5 virtual table for BM25 keyword search
 /// - docs: document registry with sync state
 class DatabaseService {
+  /// [databasePath] overrides the on-disk location, which lets a test drive
+  /// this class instead of a hand-written copy of its schema. Every FTS bug
+  /// fixed in the 3.1 pass survived because the tests recreated the tables
+  /// themselves and so never executed these methods at all.
+  DatabaseService({String? databasePath}) : _overridePath = databasePath;
+
   static const _dbName = 'survive_ai.db';
   static const _dbVersion = 3;
+
+  final String? _overridePath;
 
   Database? _db;
 
@@ -22,8 +30,9 @@ class DatabaseService {
   }
 
   Future<Database> _open() async {
-    final dir = await getApplicationDocumentsDirectory();
-    final path = p.join(dir.path, _dbName);
+    final path =
+        _overridePath ??
+        p.join((await getApplicationDocumentsDirectory()).path, _dbName);
     return openDatabase(
       path,
       version: _dbVersion,
@@ -176,42 +185,37 @@ class DatabaseService {
 
   // ── Chunks ──────────────────────────────────────────────────────────────────
 
+  /// Insert or replace chunks, letting the FTS triggers maintain the index.
+  ///
+  /// Two things here are deliberate and were previously wrong in ways that
+  /// disabled keyword search entirely:
+  ///
+  /// * Nothing is written to `chunks_fts`. It is an external-content table
+  ///   whose columns are `topic`, `heading_path` and `body`; the manual insert
+  ///   that used to be here named a `chunk_id` column that does not exist, so
+  ///   every batch failed and no chunk was ever indexed.
+  /// * Existing rows are removed with an explicit DELETE rather than
+  ///   `ConflictAlgorithm.replace`. SQLite's REPLACE skips DELETE triggers, so
+  ///   the old index row is orphaned under its old rowid and a second one is
+  ///   appended — the index grows by a full copy of the corpus on every
+  ///   re-ingest, quietly skewing BM25.
   Future<void> insertChunks(List<DocChunk> chunks) async {
+    if (chunks.isEmpty) return;
     final database = await db;
     final batch = database.batch();
     for (final chunk in chunks) {
-      batch.insert(
-        'chunks',
-        chunk.toMap(),
-        conflictAlgorithm: ConflictAlgorithm.replace,
-      );
-      batch.insert('chunks_fts', {
-        'chunk_id': chunk.id,
-        'topic': chunk.topic,
-        'heading_path': chunk.headingPath,
-        'body': chunk.body,
-      }, conflictAlgorithm: ConflictAlgorithm.replace);
+      batch.delete('chunks', where: 'id = ?', whereArgs: [chunk.id]);
+      batch.insert('chunks', chunk.toMap());
     }
     await batch.commit(noResult: true);
   }
 
+  /// Remove every chunk belonging to [docId]; the DELETE trigger de-indexes
+  /// them. The loop that used to delete from `chunks_fts` by `chunk_id` could
+  /// only ever raise, because that column does not exist on the FTS table.
   Future<void> deleteChunksForDoc(String docId) async {
     final database = await db;
-    final chunkIds = await database.query(
-      'chunks',
-      columns: ['id'],
-      where: 'doc_id = ?',
-      whereArgs: [docId],
-    );
-    final ids = chunkIds.map((r) => r['id'] as String).toList();
-    if (ids.isEmpty) return;
-
-    final batch = database.batch();
-    batch.delete('chunks', where: 'doc_id = ?', whereArgs: [docId]);
-    for (final id in ids) {
-      batch.delete('chunks_fts', where: 'chunk_id = ?', whereArgs: [id]);
-    }
-    await batch.commit(noResult: true);
+    await database.delete('chunks', where: 'doc_id = ?', whereArgs: [docId]);
   }
 
   /// BM25 keyword search via FTS5 with field-weighted ranking.
@@ -230,12 +234,16 @@ class DatabaseService {
     if (matchExpr == null) return [];
 
     final database = await db;
-    final topicClause = topicFilter != null ? 'AND topic = ?' : '';
+    final topicClause = topicFilter != null ? 'AND c.topic = ?' : '';
     final args = topicFilter != null
         ? [matchExpr, topicFilter, limit]
         : [matchExpr, limit];
+    // An external-content FTS5 table stores only the inverted index; the ids
+    // live in `chunks` and are reached through the shared rowid. Selecting
+    // `chunk_id` straight from `chunks_fts`, as this used to, is a hard error.
     final rows = await database.rawQuery('''
-      SELECT chunk_id FROM chunks_fts
+      SELECT c.id AS chunk_id FROM chunks_fts f
+      JOIN chunks c ON c.rowid = f.rowid
       WHERE chunks_fts MATCH ?
       $topicClause
       ORDER BY bm25(chunks_fts, 1.0, 2.0, 1.5)
