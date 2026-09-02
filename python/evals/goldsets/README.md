@@ -1,6 +1,6 @@
 # Golden set
 
-`retrieval.jsonl` — 346 hand-authored cases, one JSON object per line. JSONL so
+`retrieval.jsonl` — 382 hand-authored cases, one JSON object per line. JSONL so
 a diff shows one changed case per line and cases can be appended without
 rewriting the file. Blank lines and `#` comments are skipped, so the file can
 be annotated in place.
@@ -37,18 +37,10 @@ fails loudly rather than letting the score quietly drop. Re-run
 ## What the set deliberately contains
 
 Well-formed English questions are the easy case and prove very little. The set
-is weighted toward what actually arrives:
+is weighted toward what actually arrives: terse two-word queries, romanised
+Hindi, symptoms described rather than named, sibling conditions that must not
+be confused, users asking permission to do the forbidden thing, misspellings,
+and out-of-corpus queries the retriever should find *nothing* for.
 
-- **terse** — `"chest pain"`, `"aag"`, `"snake bite"`. Real panic queries are
-  two words.
-- **hinglish / code_mixed** — `"khoon nikal raha hai"`, `"ghar me aag lag gayi"`.
-- **symptom** — the condition described, never named: *"hot dry skin, confused,
-  not sweating"* must reach heat stroke.
-- **near_miss** — sibling conditions that must not be confused: snakebite vs
-  scorpion, thermal burn vs acid burn, heat exhaustion vs heat stroke,
-  post-partum haemorrhage vs generic bleeding.
-- **prohibition** — the user asking permission to do the thing the corpus
-  forbids: *"can I put toothpaste on a burn"*, *"should I tie a tourniquet"*.
-- **misspelled** — `"snak bite"`, `"bleding wont stop"`, `"earthquak trapped"`.
-- **out_of_corpus** — the retriever should return nothing rather than the
-  least-bad chunk.
+Slice-by-slice breakdown, the reasoning behind each, and how the generation and
+multi-turn sets are built: **[docs/GOLDEN_SETS.md](../../../docs/GOLDEN_SETS.md)**.

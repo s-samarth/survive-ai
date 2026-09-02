@@ -6,15 +6,18 @@ This document outlines what comes after the MVP (Phases 0–4). Items are groupe
 
 ## What the MVP Delivers (Complete)
 
-The current implementation is a fully working offline Android app optimized for 4GB edge devices:
+The current implementation is a working offline Android app targeting 6 GB
+devices (8 GB recommended):
 
 - Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~500MB) via flutter_gemma (MediaPipe LLM Inference), CPU backend
 - First-launch flow: disclaimer, WiFi check, resumable model download, SHA-256 verification, doc sync
-- 2-leg hybrid RAG: BM25 exact keyword search + BM25 on synonym-expanded queries (130+ survival-domain mappings), merged via Reciprocal Rank Fusion (K=60)
+- 3-leg hybrid RAG: BM25 exact + BM25 on synonym-expanded queries (survival, romanised Hindi, India-specific) + dense cosine against EmbeddingGemma vectors, merged via weighted Reciprocal Rank Fusion (K=60). Recall@5 89.7%
 - Instruction-last prompt engineering: short instruction (~60 tokens) placed right before the question where 2B models attend most strongly
-- Memory safety: KV cache recycled per turn, 50ms UI batching, stream error handling, token budget system (3500 max)
-- Offline chat: user message → query expansion → 2-leg BM25 retrieval → RRF merge → instruction-last prompt → Gemma streams response
-- Topic browser: 6 categories (War, Medical, Jungle, Desert, Urban, General) with Markdown doc reader
+- Memory safety: KV cache recycled per turn, 50ms UI batching, stream error handling, greedy context fill inside a 1452-token budget
+- Offline chat: route (capability / answer / decline) → follow-up anchoring → 3-leg retrieval → RRF → instruction-last prompt → Gemma streams → output guarded against its own reference material
+- Offline-built index: chunking and corpus embedding run in `python/`, so chunk ids and citations are identical on every device and in every eval report
+- Topic browser: 18 India-specific situations with a Markdown guide reader
+- An evaluation harness with three hand-authored golden sets (382 / 62 / 32 cases) and recorded baselines
 - WiFi-gated doc sync: download only changed docs, verify checksums, re-index
 - Zero-Wait RAG: survival guides bundled as Flutter assets, available before any network sync
 - Direct APK distribution — no app store required
@@ -23,16 +26,20 @@ The current implementation is a fully working offline Android app optimized for 
 
 ## Near-Term (Post-MVP)
 
-### Intent Classification & Agentic Routing
-**Why it matters:** Currently, all user messages go through the chat flow. Adding intent classification (CHAT, ASSESS, GUIDE) would allow the app to automatically route messages to the right experience.
+### Guided Situation Assessment
+**Why it matters:** `QueryRouter` already routes each message to capability /
+answer / decline before a model runs. What does not exist is the longer form:
+a few guided questions producing a structured, persistent action plan rather
+than a single answer.
 
 **What this enables:**
-- Intent classification: each message routed to CHAT, ASSESS, or GUIDE flow
-- Situation assessment: 5 guided questions, LLM extraction of structured JSON, RAG-augmented action plan generation
-- Persistent action plans stored in SQLite — survive app kill and reopen
-- Step-by-step guidance screen for task-specific instruction
+- Situation assessment: guided questions, structured extraction, a retrieval-grounded action plan
+- Plans stored in SQLite so they survive the app being killed
+- A step-by-step guidance screen
 
-**Effort:** Medium — the data model and prompt templates need to be designed and validated.
+**Effort:** Medium. The routing layer and its calibration exist; the data model
+and prompt templates do not, and a 2B model producing reliable structured
+output is the risk to test first.
 
 ---
 
@@ -49,20 +56,24 @@ The current implementation is a fully working offline Android app optimized for 
 
 ---
 
-### Dense Retrieval (Third RRF Leg)
-**Why it matters:** Query expansion bridges most vocabulary gaps, but true semantic similarity (e.g., "I feel dizzy and cold" → "hypovolemic shock symptoms") requires neural embeddings. The 3-way RRF infrastructure is already built — only the embedding model is missing.
-
-**Current state:** `RagService` already runs 3-way RRF merge. Leg 1 (BM25 exact) and Leg 2 (BM25 expanded via QueryExpander) are active. Leg 3 (dense) returns empty and is gracefully skipped. The `embedding BLOB` column exists in the `chunks` table. The `EmbeddingService` interface is defined.
+### Closing the Last Retrieval Gaps
+**Why it matters:** Recall@5 sits at 89.7% against a 90% gate, and the Hinglish
+slice is 60.7% against 92.3% for English. That slice is a large share of real
+Indian queries.
 
 **What's needed:**
-- A small embedding model (e.g., `all-MiniLM-L6-v2.onnx` at ~22MB) that can coexist with Gemma on 6-8GB devices
-- Implement `EmbeddingService.embedQuery()` to return real vectors
-- The existing `_denseRetrieveWithVector()` handles cosine similarity — no pipeline changes needed
-- Consider lifecycle management: load embedding model only during retrieval, unload before LLM inference
+- Romanised Hindi still routes to the lexical legs because embedding models are
+  trained on Devanagari. A transliteration-aware encoder, or a
+  romanised→Devanagari normalisation step before encoding, is the obvious
+  experiment and has not been run.
+- A Matryoshka dimension sweep (768/512/256/128) — EmbeddingGemma supports
+  truncation, and a smaller vector would cut both the shipped file and the
+  cosine loop. Never measured.
+- The 35 remaining Recall@5 failures are listed by the eval; several are topic
+  routing rather than ranking.
 
-**Blocked by:** On 4GB devices, any additional ML runtime alongside Gemma causes OOM. This becomes viable as 6-8GB devices become common in target regions.
-
-**Effort:** Low-Medium — the infrastructure is ready; only model integration and lifecycle management remain.
+**Effort:** Medium. The measurement infrastructure exists; the ideas are
+untested.
 
 ---
 

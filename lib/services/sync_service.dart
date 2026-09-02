@@ -205,7 +205,7 @@ class SyncService {
   /// Embed only the chunks that arrived without a vector.
   ///
   /// The bundled corpus ships pre-embedded, so in the ordinary case this does
-  /// nothing at all — which is the point. Embedding 201 passages on a 4 GB
+  /// nothing at all — which is the point. Embedding 201 passages on a 6 GB
   /// phone at every launch would cost minutes and buy vectors identical to the
   /// ones already in the asset.
   ///

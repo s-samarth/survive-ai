@@ -91,7 +91,7 @@ def models() -> list[RetrievalConfig]:
     """Question: which embedding model earns its size on this corpus?
 
     Requires the ``dense`` extra. Each row also reports the parameter cost,
-    which matters more than the score on a 4 GB device.
+    which matters more than the score on a 6 GB device.
     """
     return [
         BASELINE.with_(name="lexical-only"),

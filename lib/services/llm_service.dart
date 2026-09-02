@@ -59,8 +59,10 @@ class LlmService {
       // NOTE: maxTokens is the FULL context window (prompt + response),
       // not a response limit. See kContextTokens.
       maxTokens: kContextTokens,
-      // CPU backend: on 4 GB Android devices, GPU uses shared memory.
-      // Gemma (~1.6 GB) on GPU + app heap routinely exhausts the 4 GB pool.
+      // CPU backend: on Android, GPU inference draws from the same shared
+      // memory pool and the OS cannot reclaim it under pressure. Gemma
+      // (~1.6 GB) on GPU plus the app heap exhausts a 6 GB device; CPU uses
+      // pageable RAM the OS can evict, which is the pressure relief valve.
       // CPU keeps the model in pageable RAM where Android can manage pressure.
       preferredBackend: PreferredBackend.cpu,
     );

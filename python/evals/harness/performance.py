@@ -13,7 +13,7 @@ experience are:
       reading speed the user stops noticing.
     * **total time** -- when the answer is complete enough to act on.
 
-Measured on a laptop, so the absolute numbers are optimistic against a 4 GB
+Measured on a laptop, so the absolute numbers are optimistic against a 6 GB
 Android phone; the *ratios* between models are what transfers.
 """
 

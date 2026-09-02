@@ -60,32 +60,26 @@ android/           Android-specific build config.
 
 ### File Index
 
+Only the files whose purpose is not obvious from the name.
+
 | File | Purpose |
 |---|---|
-| `lib/main.dart` | App entry + `_EntryRouter` (first-launch routing logic) |
-| `lib/models/chat_message.dart` | `ChatMessage` — role, content, timestamp |
-| `lib/models/doc_chunk.dart` | `DocChunk` + `DocTopic` enum (6 categories) |
-| `lib/models/doc_manifest.dart` | `DocManifest`, `ModelInfo`, `DocEntry` — manifest.json schema |
-| `lib/services/llm_service.dart` | Wraps `flutter_gemma` (MediaPipe LLM Inference) — `loadModel()`, `chat()` stream |
-| `lib/services/database_service.dart` | Owns SQLite schema; all chunk/doc CRUD |
-| `lib/services/chunker_service.dart` | Markdown to 300-token chunks with 50-token overlap |
-| `lib/services/rag_service.dart` | 3-way RRF retrieval: BM25 exact + BM25 expanded + dense (stubbed) |
-| `lib/services/embedding_service.dart` | Stub embedding service — returns empty, dense leg falls back gracefully |
-| `lib/services/sync_service.dart` | WiFi-gated GitHub sync with SHA-256 verification |
-| `lib/services/download_service.dart` | Resumable HTTP downloads with SHA-256 verification |
-| `lib/utils/query_expander.dart` | 130+ survival-domain synonym mappings for BM25 query expansion |
-| `lib/providers/providers.dart` | All Riverpod providers + `llmReadyProvider` |
-| `lib/screens/disclaimer_screen.dart` | First-launch safety acknowledgement |
-| `lib/screens/setup_screen.dart` | Setup flow: WiFi check, manifest fetch, download, sync, load |
-| `lib/screens/home_screen.dart` | Main screen with Chat/Topics tabs + Assess FAB |
-| `lib/screens/chat_screen.dart` | RAG chat with streaming + trivial query filtering |
-| `lib/screens/topic_browser_screen.dart` | 2x3 grid of topic cards |
-| `lib/screens/doc_list_screen.dart` | List of docs within a topic |
-| `lib/screens/doc_reader_screen.dart` | Full Markdown renderer + "Ask AI" button |
-| `lib/screens/settings_screen.dart` | Storage info, sync controls |
-| `lib/utils/prompt_builder.dart` | Instruction-last prompt template (optimized for 2B models) |
-| `lib/widgets/message_bubble.dart` | Chat bubble with `BlinkingCursor` animation |
-| `lib/widgets/sync_status_banner.dart` | Auto-check banner for available doc updates |
+| `lib/main.dart` | Entry + `_EntryRouter`; seeds the corpus on **every** launch |
+| `lib/models/doc_topic.dart` | The 18 India situations — single source of truth for asset paths, DB topic keys and RAG filters |
+| `lib/services/chat_turn_service.dart` | One turn end to end: route → anchor → retrieve → prompt → generate → guard |
+| `lib/services/llm_service.dart` | The **only** `flutter_gemma` caller |
+| `lib/services/rag_service.dart` | 3-leg weighted RRF; `confidence()` is the signal the router declines on |
+| `lib/services/index_loader_service.dart` | Reads the offline-built index and attaches shipped vectors |
+| `lib/services/chunker_service.dart` | Fallback chunker, only for guides synced after the index was built |
+| `lib/services/embedding/gemma_tokenizer.dart` | Dart BPE port; must match Python id-for-id |
+| `lib/services/embedding/onnx_embedder.dart` | EmbeddingGemma under ONNX Runtime; encodes the query only |
+| `lib/services/embedding/vector_index.dart` | Shipped passage vectors, with a manifest consistency check |
+| `lib/utils/prompt_builder.dart` | Instruction-last template; greedy context fill inside the budget |
+| `lib/utils/query_router.dart` | capability / answer / decline, decided before a model runs |
+| `lib/utils/answer_guard.dart` | BLOCK an assertion the guides forbid; AUGMENT an omitted warning |
+| `lib/utils/transliteration.dart` | Explicit romanised-Hindi list — deliberately not inferred |
+| `python/survive_rag/` | Reference implementation + build step |
+| `python/evals/` | Golden sets, metrics, harnesses. Never ships |
 
 ### Naming Conventions
 
@@ -165,23 +159,39 @@ Theme(data: ThemeData(colorScheme: scheme), child: child)
 ### Testing
 
 ```bash
-# Run all tests
-flutter test
+flutter test                                        # 116 tests
+flutter analyze                                     # zero warnings enforced
+flutter test test/services/retrieval_parity_test.dart
 
-# Run a specific test file
-flutter test test/services/chunker_service_test.dart
+cd python && .venv/bin/python -m pytest -q          # 210 tests
+.venv/bin/ruff check .
 ```
 
+**Test through the real class, not around it.** The database tests used to
+rebuild the schema by hand, so `insertChunks`, `deleteChunksForDoc` and
+`searchFts` were never executed by anything — all three named a column the FTS
+table does not have, and keyword search was dead on the device while the whole
+suite was green. `DatabaseService` takes an optional `databasePath` for exactly
+this reason. A test that reimplements the thing it is testing is testing the
+reimplementation.
+
 **What to test:**
-- `services/` — Unit test all services with mock dependencies (use `mockito`)
-- `services/chunker_service.dart` — Test chunk boundaries with known Markdown inputs
-- `services/database_service.dart` — Integration test with in-memory SQLite (`sqflite_common_ffi`)
-- `services/rag_service.dart` — Integration test with 3 seed docs loaded into in-memory DB
-- `utils/prompt_builder.dart` — Unit test prompt string construction
+- `services/` — unit test with mock dependencies (`mockito`)
+- `database_service.dart` — drive the real class against a temp file. Not
+  `inMemoryDatabasePath`: sqflite_ffi hands the same in-memory database to every
+  connection, so rows leak between tests
+- Anything mirrored in `python/` — assert the mirror. `gemma_tokenizer_test`
+  and `retrieval_parity_test` exist because every way the two implementations
+  can disagree is silent
 
 **What NOT to test:**
-- `LlmService` — inference is non-deterministic; test manually against benchmark prompts
-- Widget tests for every screen — keep widget tests to critical flows (first launch, situation assessment)
+- `LlmService` — inference is non-deterministic; measure it with `evals gen-eval`
+- Widget tests for every screen — keep them to the critical flows
+
+**A caveat:** `assets/index/` is gitignored as generated output, and the parity
+tests **skip** rather than fail when it is absent. A green suite on a fresh
+clone does not mean they ran. Build the artifacts first with
+`python3 -m survive_rag pack` and `python3 -m evals parity`.
 
 ### Test Structure
 

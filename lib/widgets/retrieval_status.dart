@@ -4,7 +4,7 @@ import '../models/doc_chunk.dart';
 
 /// What the app is reading, shown while the model is still thinking.
 ///
-/// Time to first token is ~6 seconds on a laptop and slower on a 4 GB phone,
+/// Time to first token is ~6 seconds on a laptop and slower on a 6 GB phone,
 /// because the whole 1300-token prompt is processed before a single word
 /// appears. Six seconds of nothing reads as a hang. Naming the guide being
 /// consulted turns dead air into evidence that the answer is grounded — and

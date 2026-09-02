@@ -10,7 +10,7 @@ Two backends behind one protocol:
 Document vectors are computed **offline** and shipped inside the index
 artifact, so a device only ever embeds the query: one forward pass over ~10
 tokens, not a generation pass. That is why a dense leg is affordable here at
-all despite the 4 GB memory budget.
+all despite a 6 GB memory budget.
 
 Which models exist, and the prefixes they expect, live in
 :mod:`survive_rag.retrieval.embedder_specs`; this module is only about running

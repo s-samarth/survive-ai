@@ -6,7 +6,7 @@ import 'dart:typed_data';
 /// The device has to tokenize the query, because the query is the one thing
 /// that cannot be embedded ahead of time. Gemma's own `tokenizer.json` is
 /// 33 MB of JSON with 262,144 vocabulary entries — parsing that at launch on a
-/// 4 GB phone is not affordable, and almost all of it is dead weight for
+/// 6 GB phone is not affordable, and almost all of it is dead weight for
 /// encoding.
 ///
 /// BPE only needs strings for its very first step. Once each character has

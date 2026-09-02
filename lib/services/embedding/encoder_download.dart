@@ -16,7 +16,7 @@ import 'onnx_embedder.dart';
 /// memory-maps them, so the 175 MB is file-backed and the OS can evict it when
 /// Gemma needs the RAM. Inlining them into a single self-contained graph would
 /// be simpler to ship and would hold the same bytes as anonymous memory for the
-/// life of the process, on a device with 4 GB.
+/// life of the process, on a device with 6 GB.
 class EncoderDownload {
   const EncoderDownload({DownloadService? downloads})
     : _downloads = downloads ?? const DownloadService();

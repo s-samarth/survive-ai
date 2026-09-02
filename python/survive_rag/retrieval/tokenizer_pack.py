@@ -2,8 +2,8 @@
 
 The device has to tokenise the query, because the query is the one thing that
 cannot be embedded ahead of time. Gemma's ``tokenizer.json`` is 33 MB and
-262 144 vocabulary entries -- parsing that on a 4 GB phone at launch is not
-affordable, and most of it is dead weight for encoding.
+262 144 vocabulary entries -- parsing that at launch on the 6 GB phones this
+targets is not affordable, and most of it is dead weight for encoding.
 
 The trick is that BPE only needs strings at the very first step. Once each
 character has become an id, every merge is a pair of ids producing a third id,

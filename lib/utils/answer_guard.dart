@@ -31,7 +31,7 @@ class GuardResult {
 /// single-turn questions and failing three times in thirty-two conversational
 /// turns — always on a follow-up, always by dropping a "DO NOT" while copying
 /// the rest of a chunk. A larger model would help; a larger model does not fit
-/// in 4 GB alongside the embedder.
+/// in 6 GB alongside the embedder.
 ///
 /// So the check runs after generation instead. It is pure string work,
 /// microseconds, no model, and it knows something the model does not reliably

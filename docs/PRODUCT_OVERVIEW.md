@@ -26,33 +26,45 @@ This isn't a cloud AI with an offline mode. This is an AI that was built from th
 
 ---
 
-## Why This Is Revolutionary
+## What Makes It Work
 
-### Edge AI for the Hardest Use Case
+### Everything expensive happens before the phone sees it
 
-Running AI on a phone is not new. Running AI on a **4GB** phone, alongside a full app, with **sub-3-second response times**, producing **medically grounded answers** that could save someone's life — that is new.
+The 18 guides are identical on every device and never change at runtime. So the
+chunking, the indexing and all 201 passage embeddings are computed once, at
+build time, and ship with the app. The phone only has to handle the one thing
+that cannot be precomputed: the question.
 
-Every AI company is racing to build bigger models, faster GPUs, and more sophisticated cloud infrastructure. Survive AI goes the opposite direction: **the smallest model, the simplest retrieval, the tightest memory budget** — because that's what actually works when someone is bleeding in a bombed-out building with no internet.
+That single decision is what lets a 300M-parameter search model run alongside a
+2B answering model on a mid-range phone. Sizing a search model against "read
+the whole library at startup" and against "read one question" give completely
+different answers.
 
-### Speed Over Sophistication
+### It is built for how people actually type in an emergency
 
-In a survival emergency, you don't need the most sophisticated AI. You need the fastest correct answer. This principle drives every technical decision:
+Not "How should I treat a snakebite?" but *"saanp ne kaat liya"*, *"chest
+pain"*, *"kutte ne kaata, haldi lagau kya"*. The evaluation set is deliberately
+weighted toward romanised Hindi, two-word queries, misspellings, and symptoms
+described rather than named.
 
-- **A 2B model generates its first token in under 3 seconds.** A 7B model takes 10+ seconds and crashes on 4GB devices. When someone is applying a tourniquet, 7 seconds matters.
-- **BM25 keyword search retrieves relevant chunks in under 50 milliseconds.** Vector embeddings would take 200ms and require 200MB of additional RAM that doesn't exist.
-- **Query expansion bridges vocabulary gaps with zero memory cost.** A user says "I'm bleeding" — the system also searches for "hemorrhage," "tourniquet," "wound," and "pressure." This is done with a pure Dart dictionary, not a neural model.
-- **Answers are grounded in expert-reviewed survival guides.** The AI doesn't invent procedures. It retrieves relevant documentation and generates answers from that evidence.
+One finding shaped the design: search models trained on Devanagari score
+romanised Hindi barely above noise — 28–46% against 60.7% for plain keyword
+search. So Hinglish questions bypass the semantic search entirely. Measuring it
+is the only reason we know.
 
-### The Constraint That Creates the Innovation
+### It knows what it does not know
 
-Most AI products start with "what's the best model?" and work backwards to find users. Survive AI starts with the user — a person in a life-threatening situation with a 4GB Android phone and no internet — and works backwards to find the architecture that serves them.
+The app answers "what can this do?" from fixed text, declines questions outside
+the 18 situations rather than guessing, and checks its own answer against the
+guide passages it was given — blocking anything that asserts what the guides
+forbid.
 
-This constraint forced innovations that have no equivalent in cloud AI:
+### Every claim here is measured
 
-1. **Instruction-last prompt engineering** — placing the AI's behavioral instruction right before the question, not at the top of the prompt, because small models "forget" instructions that appear early in the context
-2. **Query expansion as a replacement for neural embeddings** — 130+ hand-crafted survival-domain synonym mappings that bridge the gap between how panicked people talk and how medical guides are written, using zero memory
-3. **KV cache recycling** — destroying the attention cache between conversation turns to keep RAM usage flat, because on a 4GB device there's no room for memory growth
-4. **Reciprocal Rank Fusion** — merging multiple retrieval signals (exact keywords + expanded synonyms) into a single ranking, so the system finds relevant content even when the user's words don't match the document's terminology
+Retrieval quality, answer safety, conversational resilience and response time
+all have hand-authored test sets and recorded baselines. Numbers, including the
+ones that currently fail their targets, are in
+[RESULTS.md](RESULTS.md).
 
 ---
 
@@ -64,7 +76,7 @@ Three things have converged to make this possible in 2026:
 
 2. **Smartphone penetration in conflict regions is high.** Even in war-torn areas, 60–80% of people carry Android smartphones — the hardware for Survive AI is already in their hands.
 
-3. **On-device AI is finally small enough.** Models like Gemma 2B IT run on a mid-range Android phone with 4GB RAM. A 500MB download is all that's needed. This wasn't possible even 12 months ago.
+3. **On-device AI is finally small enough.** Models like Gemma 2B IT run on a mid-range Android phone with 6 GB RAM, and a 300M search model fits alongside one. A 500 MB download is all that is needed.
 
 ---
 
@@ -76,7 +88,7 @@ Three things have converged to make this possible in 2026:
 | AI-powered answers | On-device LLM | Static text only | Cloud LLM |
 | Grounded in expert docs | RAG retrieval, not hallucination | N/A | Hallucination risk |
 | Sub-3-second first response | Yes (2B model, CPU) | N/A | Network dependent |
-| Works on 4GB device | Designed for it | Usually | N/A |
+| Works on a 6 GB device | Designed for it | Usually | N/A |
 | Community survival docs | Open-source, reviewed | Not available | N/A |
 | Cost to user | Free | Varies | Subscription |
 | No account required | Yes | Yes | No |
@@ -137,7 +149,7 @@ Docs are open-source, community-contributed, and reviewed by subject matter expe
 
 - **The AI brain:** Gemma 2B IT — a small language model from Google, running entirely on your phone via MediaPipe. No internet needed.
 - **The knowledge base:** Expert survival guides stored locally and retrieved automatically based on what you ask. The AI also expands your words with related survival terms to find the right information, even when you're panicking and can't use precise medical language.
-- **The speed:** Every component is optimized for the constraints of a 4GB phone. The system retrieves relevant knowledge in under 50 milliseconds, starts generating an answer in under 3 seconds, and manages memory so the app never crashes — even after dozens of conversations.
+- **The speed:** Every component is built for the constraints of a 6 GB phone. Retrieval is imperceptible; the first token currently takes about 6 seconds on a laptop against a 3-second target, which is the main open performance problem. Memory stays flat across a long conversation because the attention cache is recycled every turn.
 - **The app:** Built with Flutter for Android. Distributed as a direct APK — no app store required.
 - **Cost to build and run:** $0 — entirely open-source
 

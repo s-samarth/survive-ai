@@ -10,7 +10,7 @@ import 'gemma_tokenizer.dart';
 /// offline and ships as `assets/index/passages.f32`. Only the query has to be
 /// encoded on the device, and that is a single forward pass over roughly ten
 /// tokens. That asymmetry is the entire reason a 300M-parameter encoder fits
-/// beside a 2B generator inside a 4 GB budget.
+/// beside a 2B generator inside a 6 GB budget.
 ///
 /// The graph is the community `q4f16` export, 175 MB against 1.2 GB for the
 /// float one, and it carries its weights in a sidecar `.onnx_data` file that

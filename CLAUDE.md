@@ -46,15 +46,21 @@ India-specific by design. Do not genericise them.
 
 ## Design Principle: Speed Over Sophistication
 
-This app runs on 4GB Android devices in survival emergencies. Every design decision prioritizes fast, correct answers over architectural elegance:
-- **2B model** over larger models (first token in <3s vs 10+s)
-- **BM25 + query expansion** over neural embeddings (zero extra memory vs 200MB+ OOM)
+**Target device: 6 GB RAM minimum, 8 GB recommended.** Every design decision
+prioritises fast, correct answers over architectural elegance:
+- **2B model** over larger models (first token in seconds, not tens of seconds)
+- **Everything expensive precomputed** — chunking and corpus embedding run offline in `python/`; the phone encodes only the query
 - **Instruction-last prompts** over long system prompts (2B models forget early instructions)
-- **CPU backend** over GPU (pageable RAM vs shared memory OOM on 4GB devices)
+- **CPU backend** over GPU (pageable RAM vs a shared pool the OS cannot reclaim)
+- **No reranker** — Recall@20 is 98%, so a cross-encoder is 100 MB+ and a second forward pass for 8 points of ordering
 
 ## Key Patterns
 
-**RAG pipeline (2-leg BM25 + RRF):** Query → (1) BM25 exact match via FTS5 + (2) BM25 on synonym-expanded query via QueryExpander → Reciprocal Rank Fusion merge (K=60) → top 4 chunks → injected as reference material in prompt → Gemma generates response. Only pure greetings skip RAG (see `_smallTalk` in `chat_screen.dart`) — a word-count threshold wrongly excluded two-word emergencies like "chest pain".
+**RAG pipeline (3-leg + weighted RRF):** Query → (1) BM25 exact via FTS5,
+weight 1.0 + (2) BM25 on the synonym-expanded query, weight 0.7 + (3) cosine
+against shipped EmbeddingGemma vectors, weight 1.5 (skipped entirely for
+romanised Hindi) → RRF merge (K=60) → top 5 passages → prompt → Gemma. The
+turn is owned by `ChatTurnService`, not the widget.
 
 **FTS5 query construction is not optional.** FTS5's implicit operator between
 bare terms is **AND**, so passing a raw sentence to `MATCH` requires every word
@@ -74,7 +80,7 @@ triggers, orphaning the old index row and appending a duplicate.
 
 **LLM isolation:** All `flutter_gemma` calls go through `LlmService` only. UI never touches the model directly. `flutter_gemma` manages its own background isolate for inference.
 
-**Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend to avoid shared GPU/RAM exhaustion on 4 GB devices. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
+**Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend because GPU inference draws from a shared pool the OS cannot reclaim under pressure. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
 
 **Offline-first:** No cloud calls at runtime. WiFi-gated sync fetches a `manifest.json` from GitHub, downloads changed Markdown docs, re-indexes via chunker → FTS5.
 
