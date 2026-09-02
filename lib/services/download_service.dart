@@ -1,26 +1,44 @@
+import 'dart:convert';
 import 'dart:io';
+import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
-/// Handles resumable file downloads with SHA-256 verification.
+/// Thrown when a completed download does not match its expected SHA-256.
+class ChecksumMismatchException implements Exception {
+  final String expected;
+  final String actual;
+  const ChecksumMismatchException(this.expected, this.actual);
+
+  @override
+  String toString() =>
+      'Downloaded file is corrupt (expected sha256 $expected, got $actual)';
+}
+
+/// Resumable file downloads with SHA-256 verification.
 ///
-/// Used for both the GGUF model (~500MB) and individual doc files.
-/// Supports HTTP Range headers for resuming interrupted downloads.
+/// Used for the ~1.3 GB model and for individual doc files. On a 2G/3G
+/// connection in a village, a 1.3 GB download will be interrupted many times,
+/// so resume is not a nicety — it is the only way the download ever completes.
 class DownloadService {
-  /// Download a file from [url] to the app's files directory.
+  const DownloadService();
+
+  /// Download [url] into `<app documents>/<subfolder>/<filename>`.
   ///
-  /// [filename] — the local filename to save as (e.g. 'gemma-3-1b-it-Q4_K_M.gguf').
-  /// [subfolder] — subdirectory under app files (e.g. 'models').
-  /// [expectedSha256] — if provided, verifies checksum after download.
-  /// [expectedBytes] — total expected file size (for progress calculation).
-  /// [onProgress] — called with (bytesDownloaded, totalBytes).
+  /// Resumes from a previous partial download when the sidecar metadata proves
+  /// the partial came from the same URL and the same expected content.
   ///
-  /// Returns the full path to the downloaded file.
+  /// [expectedSha256] — when given, the finished file is hashed and the
+  /// download is discarded if it does not match. Without this, a truncated or
+  /// corrupted 1.3 GB body was renamed into place and only failed later at
+  /// model load, which the user saw as an unexplained crash loop.
   Future<String> download({
     required String url,
     required String filename,
     required String subfolder,
+    String? expectedSha256,
     int? expectedBytes,
     void Function(int downloaded, int total)? onProgress,
   }) async {
@@ -29,118 +47,165 @@ class DownloadService {
     await dir.create(recursive: true);
 
     final filePath = p.join(dir.path, filename);
-    final file = File(filePath);
-    final tempPath = '$filePath.part';
-    final tempFile = File(tempPath);
+    final tempFile = File('$filePath.part');
+    final metaFile = File('$filePath.part.json');
 
-    // Check existing bytes for resume
-    int existingBytes = 0;
+    final resumeKey = jsonEncode({
+      'url': url,
+      'bytes': expectedBytes,
+      'sha256': expectedSha256,
+    });
+
+    // Only resume when the partial provably belongs to this exact download.
+    // Blindly appending to whatever .part happened to be on disk produced a
+    // file that was the right size and complete garbage.
+    var existingBytes = 0;
     if (await tempFile.exists()) {
-      existingBytes = await tempFile.length();
+      final sameSource =
+          await metaFile.exists() && await metaFile.readAsString() == resumeKey;
+      if (sameSource) {
+        existingBytes = await tempFile.length();
+      } else {
+        await tempFile.delete();
+      }
     }
+    await metaFile.writeAsString(resumeKey);
 
-    final totalBytes = expectedBytes ?? 0;
-
-    // Build request with Range header for resume
     final request = http.Request('GET', Uri.parse(url));
-    if (existingBytes > 0) {
-      request.headers['Range'] = 'bytes=$existingBytes-';
-    }
+    if (existingBytes > 0) request.headers['Range'] = 'bytes=$existingBytes-';
 
-    final response = await http.Client().send(request);
-
-    // If server doesn't support Range, start over
-    if (response.statusCode == 200 && existingBytes > 0) {
-      existingBytes = 0;
-      if (await tempFile.exists()) await tempFile.delete();
-    }
-
-    if (response.statusCode != 200 && response.statusCode != 206) {
-      throw Exception('Download failed: HTTP ${response.statusCode}');
-    }
-
-    final contentLength = response.contentLength ?? 0;
-    final total = existingBytes + contentLength;
-    final effectiveTotal = totalBytes > 0 ? totalBytes : total;
-
-    final sink = tempFile.openWrite(mode: existingBytes > 0 ? FileMode.append : FileMode.write);
-    int downloaded = existingBytes;
-
+    final client = http.Client();
     try {
-      await for (final chunk in response.stream) {
-        sink.add(chunk);
-        downloaded += chunk.length;
-        onProgress?.call(downloaded, effectiveTotal);
+      final response = await client.send(request);
+
+      if (response.statusCode == 200 && existingBytes > 0) {
+        // Server ignored the Range header — start over.
+        existingBytes = 0;
+        if (await tempFile.exists()) await tempFile.delete();
+      } else if (response.statusCode == 206) {
+        // Trust the resume only if the server confirms the offset it is
+        // sending from. A 206 starting at a different byte silently corrupts.
+        final range = response.headers['content-range'];
+        if (!_rangeStartsAt(range, existingBytes)) {
+          throw Exception(
+            'Server returned an unexpected byte range: $range '
+            '(expected to resume at $existingBytes)',
+          );
+        }
+      } else if (response.statusCode != 200) {
+        throw Exception('Download failed: HTTP ${response.statusCode}');
       }
+
+      final total =
+          expectedBytes ?? (existingBytes + (response.contentLength ?? 0));
+
+      final sink = tempFile.openWrite(
+        mode: existingBytes > 0 ? FileMode.append : FileMode.write,
+      );
+      var downloaded = existingBytes;
+      try {
+        await for (final chunk in response.stream) {
+          sink.add(chunk);
+          downloaded += chunk.length;
+          onProgress?.call(downloaded, total);
+        }
+      } finally {
+        await sink.flush();
+        await sink.close();
+      }
+
+      // Size check first — it is free and catches most truncations.
+      final actualBytes = await tempFile.length();
+      if (expectedBytes != null && actualBytes != expectedBytes) {
+        await tempFile.delete();
+        await metaFile.delete();
+        throw Exception(
+          'Download incomplete: got $actualBytes of $expectedBytes bytes',
+        );
+      }
+
+      if (expectedSha256 != null) {
+        final actual = await sha256OfFile(tempFile);
+        if (actual != expectedSha256.toLowerCase()) {
+          await tempFile.delete();
+          await metaFile.delete();
+          throw ChecksumMismatchException(expectedSha256, actual);
+        }
+      }
+
+      final file = File(filePath);
+      if (await file.exists()) await file.delete();
+      await tempFile.rename(filePath);
+      if (await metaFile.exists()) await metaFile.delete();
+
+      return filePath;
     } finally {
-      await sink.flush();
-      await sink.close();
+      client.close();
     }
-
-    // Rename .part to final file
-    if (await file.exists()) await file.delete();
-    await tempFile.rename(filePath);
-
-    return filePath;
   }
 
-  /// Check if a file already exists at the expected location.
-  /// Checks both getApplicationDocumentsDirectory and getExternalStorageDirectory (for sideloaded files via adb).
-  Future<String?> getExistingFile(String filename, String subfolder) async {
-    // 1. Check internal documents directory
-    final appDir = await getApplicationDocumentsDirectory();
-    final internalPath = p.join(appDir.path, subfolder, filename);
-    if (await File(internalPath).exists()) return internalPath;
+  /// Streaming SHA-256 so a 1.3 GB file is never held in memory.
+  static Future<String> sha256OfFile(File file) async {
+    final digest = await sha256.bind(file.openRead()).first;
+    return digest.toString();
+  }
 
-    // 2. Check external storage directory (Android only - /sdcard/Android/data/...)
+  static bool _rangeStartsAt(String? contentRange, int offset) {
+    if (contentRange == null) return false;
+    final match = RegExp(r'bytes\s+(\d+)-').firstMatch(contentRange);
+    return match != null && int.tryParse(match.group(1)!) == offset;
+  }
+
+  /// Every directory a model file may legitimately live in.
+  ///
+  /// [findModelFile] and [deleteFile] must agree on this list — when they did
+  /// not, "Repair" deleted a copy that was not the one being loaded and the
+  /// app looped through the same failing model forever.
+  Future<List<String>> modelSearchPaths(String filename) async {
+    final appDir = await getApplicationDocumentsDirectory();
+    final paths = <String>[
+      p.join(appDir.path, 'models', filename), // written by [download]
+      p.join(appDir.path, filename), // flutter_gemma's own download location
+    ];
     if (Platform.isAndroid) {
       final extDir = await getExternalStorageDirectory();
       if (extDir != null) {
-        final externalPath = p.join(extDir.path, subfolder, filename);
-        if (await File(externalPath).exists()) return externalPath;
+        paths.add(p.join(extDir.path, 'models', filename)); // adb sideload
+        paths.add(p.join(extDir.path, filename));
       }
     }
-
-    return null;
+    return paths;
   }
 
-  /// Find the model file in any known location.
-  ///
-  /// Checks (in order):
-  /// 1. Our models/ subfolder — written by [download]
-  /// 2. Root of app documents directory — written by flutter_gemma's fromNetwork()
-  /// 3. External storage — sideloaded via ADB
-  ///
-  /// Returns the absolute path if found, null otherwise.
+  /// Absolute path of [filename] in the first location it is found, else null.
   Future<String?> findModelFile(String filename) async {
-    // 1. Our managed subfolder
-    final managed = await getExistingFile(filename, 'models');
-    if (managed != null) return managed;
-
-    // 2. flutter_gemma's network-download location (root of app docs)
-    final appDir = await getApplicationDocumentsDirectory();
-    final rootPath = p.join(appDir.path, filename);
-    if (await File(rootPath).exists()) return rootPath;
-
+    for (final path in await modelSearchPaths(filename)) {
+      if (await File(path).exists()) return path;
+    }
     return null;
   }
 
-  Future<void> deleteFile(String filename, String subfolder) async {
-    final docsDir = await getApplicationDocumentsDirectory();
-    final file = File(p.join(docsDir.path, subfolder, filename));
-    if (await file.exists()) {
-      await file.delete();
-    }
-
-    // Also check external storage
-    if (Platform.isAndroid) {
-      final extDir = await getExternalStorageDirectory();
-      if (extDir != null) {
-        final extFile = File(p.join(extDir.path, subfolder, filename));
-        if (await extFile.exists()) {
-          await extFile.delete();
+  /// Delete [filename] from every known location, plus any partial download.
+  ///
+  /// Returns the number of files removed.
+  Future<int> deleteFile(String filename) async {
+    var removed = 0;
+    for (final path in await modelSearchPaths(filename)) {
+      for (final candidate in [
+        File(path),
+        File('$path.part'),
+        File('$path.part.json'),
+      ]) {
+        try {
+          if (await candidate.exists()) {
+            await candidate.delete();
+            removed++;
+          }
+        } catch (e) {
+          debugPrint('Could not delete ${candidate.path}: $e');
         }
       }
     }
+    return removed;
   }
 }

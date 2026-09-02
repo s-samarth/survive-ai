@@ -6,7 +6,8 @@ void main() {
 
   group('ChunkerService', () {
     test('chunks simple markdown with no headings', () {
-      const markdown = 'This is a simple paragraph about finding water. '
+      const markdown =
+          'This is a simple paragraph about finding water. '
           'Always look for flowing water first.\n\n'
           'Second paragraph about purification. '
           'Boiling water for at least one minute kills most pathogens.';

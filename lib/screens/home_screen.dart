@@ -59,15 +59,19 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   }
 
   Future<void> _repairModel() async {
-    // Delete the existing model file and re-run setup (fresh download).
-    await DownloadService().deleteFile(kModelName, 'models');
+    // Delete EVERY copy — managed subfolder, flutter_gemma's download location,
+    // and external storage — plus any partial download. Deleting only
+    // models/<name> left the copy that was actually being loaded in place, so
+    // repair changed nothing and the failure repeated on every launch.
+    await DownloadService().deleteFile(kModelName);
+    if (!mounted) return;
     setState(() => _modelLoadFailed = false);
-    if (mounted) {
-      Navigator.push(
-        context,
-        MaterialPageRoute(builder: (_) => const SetupScreen()),
-      );
-    }
+    ref.read(llmErrorProvider.notifier).state = null;
+    await Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => const SetupScreen()),
+    );
+    if (mounted) _checkModel();
   }
 
   @override
@@ -75,15 +79,15 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     final llmReady = ref.watch(llmReadyProvider);
     final llmError = ref.watch(llmErrorProvider);
 
-    // Once the model is ready, hide any failure banners
-    if (llmReady) {
-      _modelMissing = false;
-      _modelLoadFailed = false;
-    }
-
+    // Derive banner visibility rather than mutating state during build.
+    // Assigning to _modelMissing/_modelLoadFailed inside build() mutated state
+    // outside setState, so the banners could persist for a frame after the
+    // model became ready.
+    //
     // llmErrorProvider is set when load throws a caught exception (not OOM).
     // _modelLoadFailed is set when load was killed by the OS (OOM / SIGKILL).
-    final showRepair = _modelLoadFailed || (llmError != null && !llmReady);
+    final showRepair = !llmReady && (_modelLoadFailed || llmError != null);
+    final showSetup = !llmReady && !showRepair && _modelMissing;
 
     return Scaffold(
       appBar: AppBar(
@@ -103,20 +107,18 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       body: Column(
         children: [
           // Repair banner — model exists but previous load failed/crashed
-          if (showRepair)
-            _ModelRepairBanner(onRepair: _repairModel),
+          if (showRepair) _ModelRepairBanner(onRepair: _repairModel),
           // Model download prompt — shown only when model file is absent
-          if (!showRepair && _modelMissing)
-            _ModelSetupBanner(onDismiss: () => setState(() => _modelMissing = false)),
+          if (showSetup)
+            _ModelSetupBanner(
+              onDismiss: () => setState(() => _modelMissing = false),
+            ),
           // Doc sync banner — shown when WiFi is up and new docs are available
-          if (!showRepair && !_modelMissing) const SyncStatusBanner(),
+          if (!showRepair && !showSetup) const SyncStatusBanner(),
           Expanded(
             child: IndexedStack(
               index: _selectedTab,
-              children: const [
-                ChatScreen(),
-                TopicBrowserScreen(),
-              ],
+              children: const [ChatScreen(), TopicBrowserScreen()],
             ),
           ),
         ],
@@ -125,7 +127,9 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
         selectedIndex: _selectedTab,
         onDestinationSelected: (i) => setState(() => _selectedTab = i),
         destinations: _tabs
-            .map((t) => NavigationDestination(icon: Icon(t.icon), label: t.label))
+            .map(
+              (t) => NavigationDestination(icon: Icon(t.icon), label: t.label),
+            )
             .toList(),
       ),
     );
@@ -162,10 +166,7 @@ class _ModelRepairBanner extends StatelessWidget {
               ),
             ),
           ),
-          TextButton(
-            onPressed: onRepair,
-            child: const Text('Repair'),
-          ),
+          TextButton(onPressed: onRepair, child: const Text('Repair')),
         ],
       ),
     );

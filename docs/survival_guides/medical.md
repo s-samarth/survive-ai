@@ -1,304 +1,207 @@
-# Medical Survival Guide
+# Emergency Medical Care Without a Hospital (India)
 
-When professional medical care is unavailable, knowing how to treat life-threatening injuries and illnesses in the field can be the difference between life and death. This guide covers the most critical interventions in order of urgency.
+This guide is for when an ambulance is not coming, or is hours away. It covers what a person with no medical training can do with cloth, water, and their hands. It does not replace a doctor. If **112** or **108** connects, call — voice often works when data does not.
 
----
-
-## Part 1: Stopping Life-Threatening Bleeding
-
-Uncontrolled hemorrhage kills faster than almost any other injury. The first minutes are everything.
-
-### Tourniquet Application (Limb Bleeding)
-
-Use for severe, life-threatening arterial bleeding on arms or legs. An arm or leg can bleed to death in 2–3 minutes from a major artery. Do not hesitate.
-
-1. **Position high and tight**: Place the tourniquet 2–3 inches above the bleeding wound, directly on skin where possible. Do not place directly over a joint — go above the joint if necessary (above the elbow for forearm wounds, above the knee for lower leg wounds)
-2. **Tighten the strap**: Pull the strap as tight as possible and secure it
-3. **Turn the windlass**: Twist the rod until the bleeding completely and visibly stops. This requires significant force — it must be tighter than you think. If blood is still flowing, it is not tight enough
-4. **Lock and secure**: Lock the rod into the clip. If no clip, tie it off with the tail strap
-5. **Mark the time**: Write the time of application on the tourniquet, on the patient's forehead, or on tape on their skin (e.g., "TQ 14:30"). This is critical — tourniquet time beyond 2 hours increases risk of permanent limb damage
-6. **Never remove in the field**: Once applied, do not loosen or remove. Only medical professionals should do this
-
-**Improvised tourniquet** if no commercial one is available:
-- Use a strip of cloth, a belt, or a torn piece of clothing at least 2 inches wide — narrower materials cut into flesh and don't stop blood flow effectively
-- Wrap twice around the limb above the wound
-- Tie a half-knot, place a stick, pen, or knife handle on top, tie a second half-knot over it, then twist the stick until bleeding stops
-- Tie the stick in place so it cannot unwind
-
-### Wound Packing (Junctional Bleeding)
-
-For deep wounds where a tourniquet cannot be applied — groin, armpit, neck, shoulder — wound packing is the only option.
-
-1. **Expose the wound fully**: Remove or cut away clothing around the wound
-2. **Find the bleeding source**: Quickly wipe away pooled blood with a cloth to identify exactly where the bleeding originates inside the wound cavity
-3. **Pack with hemostatic gauze**: If available (QuikClot, Celox, Combat Gauze), begin at the deepest point of the wound and pack the gauze in tightly. If no hemostatic gauze: use the cleanest cloth available — a shirt, underwear, anything
-4. **Press the gauze directly against the vessel**: The gauze must contact the bleeding source, not just fill the cavity above it — push it deep
-5. **Keep packing**: Fold the gauze back and forth, filling the wound from the bottom up
-6. **Apply continuous firm pressure**: Press down hard with both hands — full body weight — for a minimum of 3 minutes for hemostatic gauze, 10 minutes for standard cloth. Do not lift to check — this breaks the clot
-7. **Secure the packing**: Apply a pressure bandage over the wound to maintain pressure during transport
-
-**Neck wounds**: Pack carefully — do not apply circumferential pressure around the entire neck (compresses the airway). Pack laterally into the wound only
-
-### Direct Pressure for Minor to Moderate Bleeding
-
-For wounds that are not immediately life-threatening:
-1. Apply firm, continuous direct pressure with a clean cloth or bandage
-2. Do not remove the first cloth when it saturates — add more material on top and maintain pressure
-3. Continue for at least 10 minutes without lifting to check
+No medication dosages are given here. Where a drug is named, it is because it is available in every Indian medical shop and the dosage is printed on the strip.
 
 ---
 
-## Part 2: Airway and Breathing
+## Part 1: The Primary Survey — Check In This Order
 
-### Unconscious Patient — Recovery Position
+Every casualty, every time. Takes 30 seconds.
 
-If a patient is unconscious but breathing:
-1. Roll them gently onto their side (recovery position) — this prevents choking on vomit or blood
-2. Tilt the head back slightly and lift the chin — this opens the airway
-3. Monitor breathing continuously — check for chest rise, listen for breath sounds
-4. If breathing stops, begin CPR
+**C — Catastrophic bleeding.** Look for blood that is spurting, pooling, or soaking through cloth. Fix this before anything else. A femoral artery empties an adult in 3 minutes.
 
-### CPR (Cardiopulmonary Resuscitation)
+**A — Airway.** Is air moving? Put your ear to their mouth and watch the chest. If unconscious, the tongue falls back and blocks the throat. Tilt the head back with one hand on the forehead and lift the chin with two fingers. If you suspect a neck injury (fall from height, road accident, collapse), use a **jaw thrust** instead: push the angles of the jaw forward without moving the neck. **A blocked airway kills faster than anything else on this page.**
 
-**Adult CPR — compression-only is acceptable if you are untrained in rescue breathing:**
-1. Place the patient on their back on a firm surface
-2. Kneel beside their chest
-3. Place the heel of one hand on the center of the chest (lower half of the sternum), place your other hand on top
-4. Arms straight, compress the chest 2 inches deep, at a rate of 100–120 compressions per minute (roughly to the beat of "Stayin' Alive")
-5. Allow full chest recoil between each compression — do not lean on the chest
-6. If trained in CPR: give 2 rescue breaths after every 30 compressions (30:2 ratio). Tilt the head back, lift the chin, pinch the nose, and breathe into the mouth for 1 second — enough to see the chest rise
-7. Continue until: the patient begins breathing, a defibrillator is available, professional help arrives, or you are physically unable to continue
+**B — Breathing.** Look, listen, feel for 10 seconds. Count breaths. Normal adult is 12-20 per minute. Under 8 or over 30 is an emergency. Look for one side of the chest not moving, or a hole sucking air.
 
-**Child CPR (1–8 years):** Use one hand or two fingers for compressions. Compress about 2 inches. Ratio: 30 compressions to 2 breaths.
+**C — Circulation.** Feel the wrist (radial) pulse. If you can feel it, blood pressure is roughly adequate. If you cannot feel the wrist but can feel the neck (carotid), pressure has dropped badly — treat for shock. Press a fingernail or the palm and count how long the colour takes to return; more than 2 seconds means poor perfusion.
 
-**Infant CPR (under 1 year):** Use 2 fingers on the center of the chest. Compress about 1.5 inches.
+**D — Disability.** Are they alert? Do they respond to your voice? To pain? Or not at all? Check both pupils with a torch — unequal pupils after a head injury is a surgical emergency.
 
-### Choking
-
-**Conscious adult or child:**
-1. Ask "Are you choking?" — if they cannot speak, cough, or breathe, act immediately
-2. Give 5 firm back blows between the shoulder blades with the heel of your hand
-3. Give 5 abdominal thrusts (Heimlich maneuver): stand behind, wrap arms around the waist, make a fist above the navel and below the breastbone, grasp with other hand, thrust sharply upward and inward
-4. Alternate 5 back blows and 5 abdominal thrusts until the object is cleared or the person loses consciousness
-5. If unconscious: begin CPR — each time you open the airway to give breaths, look for the object and remove it if visible
-
-**Infant (under 1 year):** Do not use abdominal thrusts. Hold face-down on your forearm, give 5 back blows. Turn face-up, give 5 chest thrusts with 2 fingers on the center of the chest.
-
-### Sucking Chest Wound
-
-A hole in the chest wall (from a gunshot, shrapnel, or impalement) that makes a sucking sound during breathing is a medical emergency — the lung is collapsing.
-
-1. Seal the wound immediately: use a commercial chest seal (Hyfin, HALO) if available
-2. Improvised seal: use the inside surface of a plastic wrapper, bag, or any airtight material. Tape down three sides, leaving the bottom edge open to act as a one-way valve — this lets air out during exhalation but not in during inhalation
-3. Position the patient sitting upright at 45 degrees (if conscious) — this position makes breathing easiest
-4. Monitor closely: if the patient's condition worsens after sealing, burp the seal briefly to release trapped air (tension pneumothorax)
+**E — Exposure.** Now look at the whole body. Cut clothing away rather than moving them. Check the back — roll them as a single unit with help. Then **cover them immediately**. Casualties lose heat shockingly fast even in Indian weather, and cold blood does not clot.
 
 ---
 
-## Part 3: Shock
+## Part 2: Severe Bleeding
 
-Shock is a life-threatening failure of blood circulation. It can follow severe bleeding, burns, trauma, allergic reaction, or infection. Untreated, it is fatal.
+**Direct pressure is the treatment.** Everything else is a supplement.
 
-### Recognizing Shock
+1. **Press hard, directly on the wound, with your whole palm or fist.** Use any cloth — dupatta, gamcha, towel, shirt, a sanitary pad (excellent, sterile, highly absorbent). If you have nothing clean, use your bare hand. Infection is a next-week problem; bleeding is a now problem.
+2. **Do not lift the cloth to check.** You will tear off the forming clot. If blood soaks through, add more cloth **on top** and press harder.
+3. **Press for a full 10 minutes by the clock.** Most people give up at 60 seconds. Ten uninterrupted minutes of hard pressure stops the large majority of bleeding.
+4. **Elevate** the limb above the heart if it is not fractured.
+5. If the wound is deep and narrow (stab, rebar, machine injury), **pack it**. Push clean cloth firmly into the wound cavity itself, right down to the bleeding vessel, and keep pushing more in. Then press on top. Packing works when surface pressure does not.
 
-- Rapid, weak pulse (over 100 beats per minute)
-- Rapid, shallow breathing
-- Pale, cold, clammy skin
-- Confusion, restlessness, or anxiety
-- Nausea or vomiting
-- Loss of consciousness (late stage)
+**Tourniquet — when direct pressure fails on an arm or leg:**
+- Use only for limbs. Never on the neck, chest, or abdomen.
+- Use a wide strap: a belt, a folded dupatta, a bike tube, a bandage. Thin cord cuts into tissue.
+- Place it **5-8 cm above the wound**, never on a joint.
+- Tie a half knot, place a strong stick or spanner on top, tie a full knot over it, then **twist the stick until the bleeding stops**. Secure the stick.
+- It must be tight enough to hurt badly and to abolish the pulse below it. A tourniquet that hurts but still leaks is doing damage without doing good.
+- **Write the time on the person's forehead in pen, lipstick, or their own blood.** Doctors need this.
+- **Do not loosen it to "let blood through".** Once on, it stays on until a doctor removes it. A limb tolerates 2 hours reliably and often much longer; losing a limb beats losing a life.
 
-### Treating Shock
+**Impaled objects — rebar, glass, knife, wood:**
+- **Do not pull it out.** It may be plugging the vessel it cut.
+- Pack cloth around it to stabilise it, and bandage around the packing.
+- If it is too long to transport, it may need to be cut — this needs tools and support so the object does not move or heat up. Stabilise and get help.
 
-1. **Treat the cause**: Control bleeding, remove from heat or cold, treat burns — stop whatever is causing the shock
-2. **Lay the patient flat**: Supine position maximizes blood flow to the brain and vital organs
-3. **Elevate the legs 6–12 inches**: Only if there are no leg fractures, spinal injury, or difficulty breathing — this pushes blood toward the core and brain
-4. **Keep warm**: Cover with blankets or clothing — hypothermia accelerates shock
-5. **Do not give food or fluids by mouth**: The patient may need surgery and can aspirate. Exceptions: if mild dehydration is the only cause and the patient is fully conscious and can swallow safely, small sips of water are acceptable
-6. **Do not leave them alone**: Talk to them, keep them calm and conscious
-7. **Monitor and reassess every few minutes**: Check breathing, pulse, skin color, and consciousness level continuously
-
----
-
-## Part 4: Burns
-
-### Assessing Burn Severity
-
-- **First degree**: Red, dry, painful skin (like a mild sunburn). Affects only the outer skin layer
-- **Second degree**: Red, wet, blistered skin. Extremely painful. Affects deeper skin layers
-- **Third degree**: Charred, white, or leathery skin. May be painless (nerves destroyed). Full-thickness skin damage — always a medical emergency
-
-**Critical burns requiring immediate evacuation:**
-- Any burn covering more than 10% of the body
-- Burns to the face, hands, feet, genitals, or joints
-- Burns involving inhalation (singed nose hairs, hoarse voice, coughing after fire exposure)
-- All third-degree burns
-
-### Treating Burns in the Field
-
-**For first and second-degree burns:**
-1. **Cool immediately**: Run cool (not cold or ice) water over the burn for 10–20 minutes. This is the most important step — it reduces pain, swelling, and depth of injury. Do not use ice, butter, oil, or toothpaste
-2. **Remove jewelry and tight clothing near the burn**: These can constrict as swelling occurs
-3. **Do not pop blisters**: Intact blisters protect against infection
-4. **Cover loosely**: Use a clean, non-fluffy cloth or sterile bandage. Do not wrap tightly
-5. **Pain management**: Ibuprofen or paracetamol if available
-
-**For third-degree burns:**
-1. Do not apply water — may cause further tissue damage and hypothermia
-2. Do not remove clothing stuck to the burn
-3. Cover with a clean, dry dressing
-4. Treat for shock
-5. Evacuate immediately
-
-**Inhalation injury signs**: Singed eyebrows or nasal hair, hoarseness, stridor (high-pitched breathing), soot in the mouth or nose, confusion after fire exposure. This is immediately life-threatening — sit the patient upright, monitor breathing, evacuate urgently.
+**Amputated part:** Wrap it in clean damp cloth, seal it in a plastic bag, and put that bag in a second bag with cold water and ice if available. **Never put the part directly on ice or in water.** Send it with the casualty.
 
 ---
 
-## Part 5: Fractures and Dislocations
+## Part 3: Not Breathing — CPR
 
-### Fracture Splinting
+If they are unresponsive and not breathing normally (gasping does not count as breathing):
 
-Splinting reduces pain, prevents further injury, and makes transport safer.
+1. **Shout for help.** Send a specific person to call 112 and to find an AED if you are in an airport, metro station, or large mall.
+2. **Hands in the centre of the chest**, heel of one hand, other hand on top, fingers interlocked.
+3. **Push hard and fast.** 5-6 cm deep in an adult — about one third of the chest depth. **100-120 compressions per minute.** The Hindi film song "Kajra Re" and the standard "Stayin' Alive" are both close to this tempo; count out loud.
+4. **Let the chest come all the way back up** between compressions. Incomplete recoil is the most common error and it stops the heart refilling.
+5. **Do not stop.** Compression-only CPR is now standard for untrained rescuers and works. Do not waste time on mouth-to-mouth if you are unwilling or unsure — chest compressions alone are far better than hesitating.
+6. **Swap rescuers every 2 minutes** if anyone else is available. Quality collapses after 2 minutes and you will not notice it happening.
+7. Continue until they wake up, help arrives, or you physically cannot continue.
 
-1. **Do not attempt to straighten or realign the bone**: Splint the limb in the position you find it, with the exception of a limb that has no pulse or circulation (see below)
-2. **Check circulation first**: Feel for a pulse below the fracture, check that the fingers or toes are warm and can feel sensation. Loss of pulse or sensation is an emergency
-3. **Pad the splint**: Place soft padding (clothing, foam, cloth) between the rigid splint material and the skin — bare rigid splints cause pressure sores and circulation problems
-4. **Rigid splint material**: Sticks, boards, rolled magazines, trekking poles, umbrella handles — anything rigid and long enough to immobilize the joint above and below the fracture
-5. **Secure above and below**: Tie the splint firmly but not tightly enough to restrict blood flow. Check circulation again after tying
-6. **Elevate**: Raise the splinted limb above the level of the heart if possible — reduces swelling and pain
-7. **Recheck every 30 minutes**: Check circulation (pulse, sensation, skin color) regularly, especially if swelling is increasing
+**Children:** Same, but use one hand (or two fingers for an infant), press about one third of chest depth, and if you are willing, give 2 rescue breaths after every 30 compressions — children usually arrest from an airway or breathing problem rather than a heart problem, so breaths matter more.
 
-**Open fracture** (bone visible through skin): Cover the wound with a clean dressing before splinting. Do not push the bone back in. Treat for infection risk.
-
-### Shoulder Dislocation
-
-A dislocated shoulder is intensely painful. It can sometimes be reduced in the field if evacuation is delayed.
-
-**Simple traction method:**
-1. Lay the patient on their back
-2. Gently and steadily pull the arm straight out from the body at about a 20-degree angle from the side — sustained, gentle traction, not jerking
-3. Slowly rotate the arm outward (palm toward ceiling) while continuing traction
-4. Reduction is felt and heard as a dull clunk — the patient will typically have immediate relief
-5. If it does not reduce within 2–3 minutes, stop — further force can fracture bone. Splint in position of comfort and evacuate
+**Drowning (very common in Indian floods, wells, and rivers):** Give 5 rescue breaths first, then start compressions. Water rescue casualties are oxygen-starved, not heart-attack victims.
 
 ---
 
-## Part 6: Infections and Wound Care
+## Part 4: Choking
 
-### Wound Cleaning
+**If they can cough or speak:** encourage coughing. Do not hit them.
 
-Infection kills slowly but surely. A wound that is dirty and not cleaned will become infected within 24–48 hours in the field.
+**If they cannot speak, cough, or breathe:**
+1. **5 sharp back blows** between the shoulder blades with the heel of your hand, leaning them forward.
+2. **5 abdominal thrusts** — stand behind, fist above the navel and below the ribs, other hand over the fist, pull sharply in and up.
+3. Alternate 5 and 5 until it clears or they collapse.
+4. If they collapse, start CPR. Chest compressions generate enough pressure to expel an obstruction.
 
-1. **Irrigate aggressively**: The most effective method is high-pressure irrigation with clean water. Fill a plastic bag with a small hole, a syringe, or a water bottle with a pinhole cap and squeeze water forcefully directly into the wound. Use at least 500ml per wound
-2. **Remove debris**: Use clean tweezers or a clean cloth to remove visible dirt, gravel, and foreign material
-3. **Do not pack tightly**: Dirty wounds should be left open to drain — closed wounds trap bacteria
-4. **Apply antiseptic**: Iodine or chlorhexidine solution is best. Alcohol works but causes tissue damage and slows healing — use only when nothing else is available. Hydrogen peroxide is not recommended — it destroys healthy tissue
-5. **Cover loosely**: Use a clean bandage. Change daily and irrigate again each time
+**Infant under 1 year:** face down along your forearm, head lower than body, 5 back blows; then face up, 5 chest thrusts with two fingers. **Never abdominal thrusts on an infant.**
 
-### Signs of Infection
-
-An infected wound will show increasing redness, warmth, swelling, and pain after 24–48 hours. Watch for:
-- Red streaks radiating outward from the wound (lymphangitis — dangerous, spreading infection)
-- Pus (cloudy, yellow, green, or foul-smelling discharge)
-- Fever and chills
-- Swollen lymph nodes near the wound
-- The wound feels warm to the touch despite overall cooling
-
-**Red streaks or fever with a wound are medical emergencies** — blood poisoning (sepsis) can kill within hours without antibiotics.
-
-### Improvised Wound Closure
-
-For gaping wounds that need to be held together:
-- **Butterfly closures**: Cut strips from tape about 1cm wide, notch the sides into a butterfly shape, apply across the wound to pull the edges together
-- **Hair closure**: For scalp wounds, tie strands of hair from each side of the wound together using a simple overhand knot to hold the wound closed
-- Do not close a wound that was contaminated with dirt or debris — irrigate thoroughly first, leave open for 24 hours, then close if clean
+**Pregnant or very obese:** chest thrusts at the breastbone instead of abdominal thrusts.
 
 ---
 
-## Part 7: Heat and Cold Emergencies
+## Part 5: Shock
 
-### Heat Exhaustion
+Shock is failing circulation. It kills quietly, after the dramatic injury has been dealt with.
 
-- **Symptoms**: Heavy sweating, cool/pale/clammy skin, fast/weak pulse, nausea, headache, dizziness, muscle cramps, fatigue
-- **Treatment**: Move to a cool shaded area. Loosen clothing. Apply cool, wet cloths to skin. Fan the patient. Give water in small, frequent sips if conscious and not vomiting. Rest for several hours
-
-### Heat Stroke
-
-Heat stroke is a medical emergency. The cooling mechanism has failed.
-
-- **Symptoms**: Hot, red, dry OR damp skin, rapid strong pulse, confusion, slurred speech, high temperature (above 40°C/104°F), possible unconsciousness
-- **Treatment**:
-  1. Cool the patient immediately by any means — immerse in cool water if possible, apply ice or very cold cloths to the neck, armpits, and groin (where major blood vessels run close to the skin)
-  2. Fan vigorously while misting with water
-  3. Do not give fluids by mouth if confused or unconscious
-  4. Continue cooling until temperature drops below 38.5°C (101.3°F) or until the patient improves
-  5. Evacuate urgently — heat stroke causes organ failure
-
-### Hypothermia
-
-Body core temperature has dropped dangerously low.
-
-- **Mild** (32–35°C / 90–95°F): Shivering, confusion, clumsiness, slurred speech, pale skin
-- **Severe** (below 32°C / 90°F): Shivering stops (body no longer has energy to shiver), rigid muscles, very slow pulse, pupils dilated, unconscious
+**Signs:** pale, grey, or ashen skin; cold clammy sweat; fast weak pulse; fast shallow breathing; thirst; restlessness then confusion then unconsciousness. In darker skin, check the lips, gums, nail beds, and inner eyelids for pallor.
 
 **Treatment:**
-1. Remove from cold and wet environment immediately
-2. Remove wet clothing — wet clothing transfers heat away from the body 25× faster than air
-3. Insulate from the ground and cover the patient completely — cover the head and neck, which lose the most heat
-4. Apply external heat to armpits, groin, and neck (chemical heat packs, warm water bottles, another person's body heat)
-5. Do not rub the limbs — this can trigger cardiac arrest by pushing cold blood from the extremities to the core
-6. Give warm sweet drinks ONLY if the patient is conscious and not confused
-7. Handle gently — even rough transport can trigger cardiac arrest in severe hypothermia
-8. "Not dead until warm and dead" — a severely hypothermic patient may have no pulse but can be resuscitated if warmed properly. Continue CPR during rewarming
+- **Stop the cause** — bleeding, above all.
+- **Lie them flat and raise the legs 30 cm** on a bag or a rolled blanket, unless the legs or pelvis are broken or you suspect a spinal injury.
+- **Keep them warm.** Blanket under as well as over — the ground steals more heat than the air. This matters even in Indian summer once someone has lost blood.
+- **Nothing by mouth** if surgery is possible or they are drowsy. If help is many hours away and they are fully alert with no abdominal injury, small sips of ORS are reasonable.
+- **Reassure and stay with them.** Fear worsens shock measurably.
 
 ---
 
-## Part 8: Severe Dehydration and Oral Rehydration
+## Part 6: Burns
 
-### Recognizing Dehydration
+Extremely common in India: LPG cylinder flashovers, stove and kerosene fires, saree/dupatta catching a gas flame, electrical, industrial acid, and firecracker injuries.
 
-- **Mild**: Thirst, slightly darker urine
-- **Moderate**: Dry mouth, headache, decreased urination (dark yellow), dizziness when standing
-- **Severe**: Extreme thirst, no urination for 8+ hours, very dark or no urine, confusion, sunken eyes, rapid heartbeat, dry skin that doesn't spring back when pinched
+1. **Stop the burning.** Smother flames with a heavy cloth or blanket. Stop-drop-roll. For chemicals, brush off dry powder first, then flush.
+2. **Cool with clean running water for 20 full minutes.** Not ice, not iced water — ice causes further tissue damage. Twenty minutes is the number; most people stop at two and it costs the patient depth of burn.
+3. **Remove rings, bangles, chudiyan, watches, and belts immediately**, before swelling starts. Do not pull off clothing that is stuck to the burn — cut around it.
+4. **Cover loosely** with cling film (lay it on, do not wrap around a limb), a clean cotton cloth, or a clean plastic bag for a hand or foot.
+5. **Do not apply toothpaste, haldi, ghee, oil, ink, cow dung, egg white, or burnol.** These are all common in India and all of them trap heat, drive infection, and make debridement far more painful. Water only.
+6. **Do not burst blisters.**
+7. **Give ORS in small frequent sips** if they are alert and the burn is large — burns cause massive fluid loss.
 
-### Treatment
+**Get to a hospital urgently for:** burns to the face, neck, hands, feet, or genitals; burns going all the way round a limb or the chest; any burn larger than the person's palm-and-fingers (about 1% of body area); electrical burns; chemical burns; any burn in a child or elderly person; and **any suspicion of smoke inhalation** — soot around the nose or mouth, a hoarse voice, or a cough. Airway swelling from inhalation can close the throat hours later.
 
-1. Move to shade and rest
-2. **Oral Rehydration Salt (ORS) solution**: Mix 1 liter of clean water + 6 level teaspoons of sugar + 0.5 teaspoon of salt. If no sugar: any sweetened drink diluted with water
-3. Drink in small, frequent sips — large gulps often cause vomiting, which makes dehydration worse
-4. Continue until urination resumes and urine is pale yellow
-5. A fully hydrated person can lose 1–2 liters of sweat per hour in heat — active hydration is critical in hot environments
-6. **Do not ration water when you have it** — drink to thirst. Humans are very poor at sensing dehydration until it is already moderate severity
-
-### When NOT to Give Fluids Orally
-
-- Unconscious or semi-conscious patients — aspiration risk
-- Patients with abdominal injury or suspected internal bleeding — may need surgery
-- Patients actively vomiting — replace fluids slowly after vomiting stops
+**Acid attack:** flush with large volumes of running water for at least 30 minutes, continuously, while moving to a hospital. Do not attempt to neutralise with anything. Remove contaminated clothing while flushing, protecting yourself.
 
 ---
 
-## Part 9: Improvised Medications and Treatments
+## Part 7: Fractures and Dislocations
 
-### Pain Relief Without Medication
+**Signs:** deformity, swelling, inability to bear weight or use the limb, grating, and the person's own conviction that it is broken.
 
-- **RICE for sprains and fractures**: Rest, Ice (or cold water), Compression, Elevation — significantly reduces pain and swelling
-- **Pressure and elevation** for wounds
-- **Immobilization** significantly reduces pain from fractures
-- Willow bark tea (from fresh white willow bark): contains salicin, a natural aspirin-like compound. Steep bark in boiling water for 10 minutes. Works but is much weaker than pharmaceutical aspirin
+**Treatment:**
+- **Splint it where it lies.** Do not try to straighten it, except when the limb below the break is pale, cold, and pulseless — then apply gentle traction in line with the limb to restore blood flow.
+- **Immobilise the joint above and the joint below.** Use rolled newspaper, cardboard, bamboo, a rolled magazine, a plank, or the person's own body — strap an injured leg to the good leg, strap an injured arm to the chest.
+- **Pad every hard surface** and check the fingers and toes for colour, warmth, and sensation after strapping. If they go pale or numb, it is too tight.
+- **Open fracture (bone through skin):** cover with a clean dressing, do not push the bone back, splint, and treat as urgent — infection risk is very high.
+- **Ice and elevation** reduce swelling and pain.
 
-### Infection Control Without Antibiotics
+**Pelvis:** suspect it after any fall from height or vehicle impact with hip pain. Bind a sheet or dupatta firmly around the hips at the level of the hip bones, tie at the front, and **do not log-roll or move them more than absolutely necessary**. A pelvic fracture can bleed litres internally.
 
-- Honey: medical-grade Manuka honey has documented antibacterial properties. Applied directly to wounds, it inhibits bacterial growth and promotes healing
-- Garlic: crushed raw garlic contains allicin, which has antibacterial properties. Apply to wound surface — will cause some irritation
-- Maggot therapy: in truly desperate circumstances (no antibiotics, deep infected wound, gangrene risk), clean fly maggots (larvae that feed only on dead tissue) placed in a wound and covered with gauze can debride necrotic tissue and reduce infection. Used historically in medicine
-- Keep wounds clean, aerated, and dry between cleanings — the primary defense against infection without antibiotics
+**Spine:** if the mechanism suggests it (fall from height, dive into shallow water, road accident, collapse) and they have neck or back pain, tingling, or weakness — **do not move them** unless there is fire, water, or collapse risk. Support the head in the position found. If you must move them, keep the head, neck, and body in one straight line and use at least four people.
 
-### Fever Management
+---
 
-- Tepid sponge bath (lukewarm water, not cold — cold causes shivering which generates heat)
-- Ensure hydration — fever dramatically increases fluid loss
-- Willow bark tea if available (see above)
-- Rest in the coolest available environment
-- Do not suppress a low-grade fever (below 38.5°C/101.3°F) — it is the body's immune defense
-- Act on fever above 39.5°C (103°F), especially in children, or any fever with neck stiffness, confusion, or rash (potential meningitis)
+## Part 8: Head Injury
+
+Any blow to the head with loss of consciousness, even briefly, is significant.
+
+**Get to a hospital immediately if any of these appear, even hours later:**
+- Vomiting more than once
+- Increasing drowsiness or difficulty waking
+- Confusion, not knowing the date, place, or people
+- Unequal pupils
+- Clear fluid or blood from the nose or ear
+- Weakness or numbness on one side
+- Seizure
+- Worsening headache
+
+**While waiting:** keep them awake if possible, sit them up at 30 degrees if there is no spinal concern, do not give painkillers other than paracetamol (aspirin and ibuprofen worsen bleeding), and do not let them sleep unobserved. Wake and check them every 2 hours through the first night.
+
+---
+
+## Part 9: Chest Injuries
+
+**Sucking chest wound** (air bubbling from a hole in the chest): cover with anything airtight — plastic sheet, a cut-open polythene bag, cling film, a foil wrapper. **Tape three sides only**, leaving one side open, so air can escape but not enter. If they get worse after sealing, lift a corner to release trapped pressure.
+
+**Broken ribs:** do not strap the chest — it prevents deep breathing and causes pneumonia. Support the arm on that side in a sling, give paracetamol, and encourage them to take a deep breath and cough every hour despite the pain.
+
+**Sudden severe breathlessness with one-sided chest pain** after a chest injury may be a collapsed lung. Sit them up, keep them calm, and get help urgently.
+
+---
+
+## Part 10: Heat and Cold Emergencies
+
+See the **Heat and Cold** guide for full detail. Summary:
+
+**Heat stroke** (hot, confused, may have stopped sweating, temperature over 40 C): **this is a life-threatening emergency and cooling is the treatment.** Move to shade, strip clothing, pour water over them continuously and fan hard, put ice or cold packs in the armpits, groin, and neck. Aggressive cooling in the first 30 minutes decides whether they live.
+
+**Hypothermia** (shivering, then confusion, then stopping shivering — a very bad sign): get them out of the wind and off the ground, remove wet clothes, wrap in dry insulation including the head, and give warm sweet drinks only if fully alert. Handle gently — rough handling can trigger cardiac arrest in severe hypothermia.
+
+---
+
+## Part 11: Common Indian Emergencies
+
+**Heart attack:** central crushing chest pain or heaviness, often spreading to the left arm, jaw, or back; sweating, nausea, breathlessness. Sit them up, loosen clothing, keep them absolutely still. If they are conscious, not allergic, and not already bleeding, a **dispersible aspirin chewed** (available in every Indian medical shop as Ecosprin) is standard first aid. Get to a hospital with a cath lab. In women and diabetics, the pain is often absent — unexplained sweating, breathlessness, or indigestion-like discomfort should be taken seriously.
+
+**Stroke — use BE FAST:** **B**alance lost, **E**yes/vision lost, **F**ace drooping on one side, **A**rm weak on one side, **S**peech slurred, **T**ime — note the exact time symptoms started and get to a hospital with a CT scanner immediately. Clot-busting treatment works within a window of a few hours. Give nothing by mouth — swallowing is often impaired.
+
+**Seizure/fit:** do not restrain them, do not put anything in the mouth (people break teeth and fingers doing this — a person cannot swallow their tongue). Clear hard objects away, cushion the head, and time it. Roll them onto their side once it stops. Seek help if it lasts over 5 minutes, if a second fit follows, if they do not wake up, if they are pregnant, or if it is their first ever fit.
+
+**Diabetic emergency:** if a known diabetic is confused, sweaty, shaky, or aggressive, assume **low blood sugar**. Give sugar immediately — glucose powder, sugar in water, a soft drink, honey, gur. If they can swallow, this fixes it in minutes. If they are unconscious, place in the recovery position, rub honey or glucose gel inside the cheek, and get help. Low sugar kills quickly; high sugar kills slowly — so when in doubt, give sugar.
+
+**Anaphylaxis** (severe allergy — swelling of the face, lips, tongue, throat; wheeze; collapse after a sting, food, or a drug): this kills within minutes. If an adrenaline auto-injector is available, use it into the outer thigh, through clothing if necessary. Lie them flat with legs raised (sit up only if they cannot breathe lying down). An antihistamine tablet helps mild reactions but does not treat anaphylaxis.
+
+**Electrocution:** **do not touch the person until the supply is isolated.** Switch off at the mains, or push them clear with dry wood or dry plastic while standing on something dry. Then check breathing and start CPR — electrical injury commonly stops the heart. Look for entry and exit burns.
+
+**Poisoning / pesticide ingestion** (very common in rural India — organophosphates): **do not make them vomit.** Do not give milk or salt water. Keep the container or a photo of it. Signs of organophosphate poisoning are pinpoint pupils, drooling, sweating, vomiting, and difficulty breathing. Get them to a hospital urgently — atropine is the antidote and it is stocked at PHCs.
+
+**Unconscious but breathing:** put them in the **recovery position** — roll onto their side, top leg bent forward, head tilted back and resting on the lower hand, mouth pointing down so vomit drains. Check breathing every minute. This single position prevents more deaths than any other first-aid manoeuvre.
+
+---
+
+## Part 12: Wound Care Over Days
+
+If evacuation will take days, wounds become the main threat.
+
+- **Clean with the cleanest water you have**, ideally boiled and cooled. Irrigate with pressure — a squeezed plastic bottle with a pinhole in the cap works. Volume matters more than antiseptic.
+- **Remove visible dirt, gravel, glass, and cloth.**
+- **Do not close a dirty wound**, and never close an animal bite. Leave it open, dressed, and draining.
+- **Change the dressing daily**, or whenever it is wet or dirty.
+- **Watch for infection:** spreading redness, increasing pain after day two, heat, swelling, pus, foul smell, red streaks running up the limb, or fever. Red streaks and fever mean the infection is spreading through the body — this needs antibiotics and a doctor.
+- **Tetanus** is a genuine and lethal risk in India, especially from soil-contaminated wounds, animal bites, and injuries in flood water. If the last tetanus shot was over 5 years ago and the wound is dirty, get one as soon as any medical facility is reachable.
+- **Maggots in a wound** look horrifying but are not an emergency and may even help. Clean the wound, cover it, and get medical care when you can.

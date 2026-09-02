@@ -1,105 +1,65 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
-import 'package:flutter_markdown/flutter_markdown.dart';
-import '../models/doc_chunk.dart';
+import '../models/doc_topic.dart';
+import 'guide_reader_screen.dart';
 
-/// Displays a list of survival situation categories.
-/// Tapping a situation opens the full guide rendered as Markdown.
+/// Lists every survival situation the app carries offline.
+///
+/// Ordered by how urgently a user is likely to need it, not alphabetically:
+/// the first two entries answer "something just happened" and "my phone is
+/// dead", which is the state most users open this app in.
 class TopicBrowserScreen extends StatelessWidget {
   const TopicBrowserScreen({super.key});
 
-  static const _situations = [
-    _SituationItem(topic: DocTopic.war, icon: Icons.shield_outlined, color: Color(0xFFB71C1C)),
-    _SituationItem(topic: DocTopic.medical, icon: Icons.medical_services_outlined, color: Color(0xFF1565C0)),
-    _SituationItem(topic: DocTopic.jungle, icon: Icons.forest_outlined, color: Color(0xFF2E7D32)),
-    _SituationItem(topic: DocTopic.desert, icon: Icons.wb_sunny_outlined, color: Color(0xFFF57F17)),
-    _SituationItem(topic: DocTopic.urban, icon: Icons.location_city_outlined, color: Color(0xFF4527A0)),
-    _SituationItem(topic: DocTopic.general, icon: Icons.star_outline, color: Color(0xFF00695C)),
-  ];
+  static const _accents = <DocTopic, (IconData, Color)>{
+    DocTopic.firstResponse: (Icons.bolt_outlined, Color(0xFFC62828)),
+    DocTopic.blackout: (Icons.signal_cellular_off, Color(0xFF37474F)),
+    DocTopic.medical: (Icons.medical_services_outlined, Color(0xFF1565C0)),
+    DocTopic.earthquake: (Icons.foundation_outlined, Color(0xFF6D4C41)),
+    DocTopic.flood: (Icons.water_outlined, Color(0xFF0277BD)),
+    DocTopic.cyclone: (Icons.cyclone_outlined, Color(0xFF00838F)),
+    DocTopic.landslide: (Icons.terrain_outlined, Color(0xFF558B2F)),
+    DocTopic.fire: (Icons.local_fire_department_outlined, Color(0xFFE65100)),
+    DocTopic.crowd: (Icons.groups_outlined, Color(0xFF6A1B9A)),
+    DocTopic.unrest: (Icons.report_gmailerrorred_outlined, Color(0xFF4527A0)),
+    DocTopic.blast: (Icons.dangerous_outlined, Color(0xFFB71C1C)),
+    DocTopic.war: (Icons.shield_outlined, Color(0xFF33691E)),
+    DocTopic.chemical: (Icons.science_outlined, Color(0xFF00695C)),
+    DocTopic.heatCold: (Icons.thermostat_outlined, Color(0xFFEF6C00)),
+    DocTopic.bites: (Icons.pest_control_outlined, Color(0xFF827717)),
+    DocTopic.waterFood: (Icons.water_drop_outlined, Color(0xFF0097A7)),
+    DocTopic.shelter: (Icons.cabin_outlined, Color(0xFF5D4037)),
+    DocTopic.vulnerable: (Icons.escalator_warning_outlined, Color(0xFFAD1457)),
+  };
+
+  static (IconData, Color) _accentFor(DocTopic topic) =>
+      _accents[topic] ?? (Icons.article_outlined, const Color(0xFF546E7A));
 
   @override
   Widget build(BuildContext context) {
     return ListView.separated(
       padding: const EdgeInsets.symmetric(vertical: 8),
-      itemCount: _situations.length,
-      separatorBuilder: (context, index) => const Divider(height: 1),
+      itemCount: DocTopic.values.length,
+      separatorBuilder: (_, _) => const Divider(height: 1),
       itemBuilder: (context, index) {
-        final item = _situations[index];
+        final topic = DocTopic.values[index];
+        final (icon, color) = _accentFor(topic);
         return ListTile(
           leading: CircleAvatar(
-            backgroundColor: item.color.withValues(alpha: 0.12),
-            child: Icon(item.icon, color: item.color, size: 22),
+            backgroundColor: color.withValues(alpha: 0.12),
+            child: Icon(icon, color: color, size: 22),
           ),
-          title: Text(item.topic.displayName),
-          subtitle: Text('${item.topic.displayName} survival guide'),
+          title: Text(topic.displayName),
+          subtitle: Text(topic.summary),
+          isThreeLine: false,
           trailing: const Icon(Icons.chevron_right),
           onTap: () => Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => _GuideScreen(topic: item.topic, color: item.color),
+              builder: (_) => GuideReaderScreen(topic: topic, accent: color),
             ),
           ),
         );
       },
-    );
-  }
-}
-
-class _SituationItem {
-  final DocTopic topic;
-  final IconData icon;
-  final Color color;
-  const _SituationItem({required this.topic, required this.icon, required this.color});
-}
-
-/// Renders a bundled survival guide as formatted Markdown.
-class _GuideScreen extends StatefulWidget {
-  final DocTopic topic;
-  final Color color;
-  const _GuideScreen({required this.topic, required this.color});
-
-  @override
-  State<_GuideScreen> createState() => _GuideScreenState();
-}
-
-class _GuideScreenState extends State<_GuideScreen> {
-  String? _markdown;
-  String? _error;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    try {
-      final content = await rootBundle.loadString(
-        'docs/survival_guides/${widget.topic.name}.md',
-      );
-      if (mounted) setState(() => _markdown = content);
-    } catch (e) {
-      if (mounted) setState(() => _error = e.toString());
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: Text('${widget.topic.displayName} Survival'),
-        backgroundColor: widget.color.withValues(alpha: 0.08),
-      ),
-      body: _markdown != null
-          ? Markdown(data: _markdown!, padding: const EdgeInsets.all(16), selectable: true)
-          : _error != null
-              ? Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(32),
-                    child: Text(_error!, style: TextStyle(color: Colors.red[700])),
-                  ),
-                )
-              : const Center(child: CircularProgressIndicator()),
     );
   }
 }

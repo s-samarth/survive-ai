@@ -11,14 +11,14 @@ class ChatMessage {
   });
 
   Map<String, dynamic> toJson() => {
-        'role': role,
-        'content': content,
-        'timestamp': timestamp.millisecondsSinceEpoch,
-      };
+    'role': role,
+    'content': content,
+    'timestamp': timestamp.millisecondsSinceEpoch,
+  };
 
   factory ChatMessage.fromJson(Map<String, dynamic> json) => ChatMessage(
-        role: json['role'] as String,
-        content: json['content'] as String,
-        timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
-      );
+    role: json['role'] as String,
+    content: json['content'] as String,
+    timestamp: DateTime.fromMillisecondsSinceEpoch(json['timestamp'] as int),
+  );
 }

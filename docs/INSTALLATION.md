@@ -353,7 +353,7 @@ The maintainer's signing key fingerprint is published in `SECURITY.md`.
 | Requirement | Minimum | Recommended |
 |---|---|---|
 | Android version | 7.0 (API 24) | 10.0+ (API 29+) |
-| RAM | 3GB | 4GB+ |
+| RAM | 6 GB | 8 GB+ |
 | Storage | 1GB free | 2GB+ free |
 | CPU | ARM64 (arm64-v8a) | ARM64 (arm64-v8a) |
 | Internet | WiFi for first launch | Not required after setup |

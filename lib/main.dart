@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_gemma/flutter_gemma.dart';
@@ -26,11 +27,7 @@ void main() async {
     databaseFactory = databaseFactoryFfi;
   }
 
-  runApp(
-    const ProviderScope(
-      child: SurviveAiApp(),
-    ),
-  );
+  runApp(const ProviderScope(child: SurviveAiApp()));
 }
 
 class SurviveAiApp extends StatelessWidget {
@@ -88,28 +85,39 @@ class _EntryRouterState extends ConsumerState<_EntryRouter> {
     final disclaimerAccepted = prefs.getBool('disclaimer_accepted') ?? false;
 
     if (!disclaimerAccepted) {
-      setState(() => _target = const DisclaimerScreen());
+      if (mounted) setState(() => _target = const DisclaimerScreen());
       return;
     }
 
-    // Always go to HomeScreen — it handles the model-missing case itself
-    setState(() => _target = const HomeScreen());
+    // Read the crash flag and locate the model BEFORE mounting HomeScreen.
+    // HomeScreen's own initState clears 'model_load_pending', so reading it
+    // afterwards raced against that clear and we would happily retry the load
+    // that had just been OOM-killed.
+    final prevCrashed = prefs.getBool('model_load_pending') ?? false;
+    final modelPath = await DownloadService().findModelFile(kModelName);
 
-    // Find the model file on disk (checks all known locations)
-    final modelPath =
-        await DownloadService().findModelFile(kModelName);
-    if (modelPath != null) {
-      // If the previous load attempt was killed by the OS (OOM / SIGKILL),
-      // the 'model_load_pending' flag is still set. Don't retry automatically —
-      // let HomeScreen show the repair banner so the user can decide.
-      final prefs = await SharedPreferences.getInstance();
-      final prevCrashed = prefs.getBool('model_load_pending') ?? false;
-      if (prevCrashed) return;
+    if (mounted) setState(() => _target = const HomeScreen());
 
-      // Set the flag BEFORE loading. If the process is killed mid-load,
-      // this persists and HomeScreen detects the crash on next launch.
-      await prefs.setBool('model_load_pending', true);
-      _loadModel(modelPath);
+    // Seed the bundled India guides on EVERY launch, independent of the model.
+    // This used to run only inside the model-download flow, so a sideloaded or
+    // already-present model left the RAG corpus permanently empty. Guides are
+    // the part of the app that works without the LLM, so they must not depend
+    // on it. Idempotent: already-current topics are skipped.
+    unawaited(_seedCorpus());
+
+    if (modelPath == null || prevCrashed) return;
+
+    // Set the flag BEFORE loading. If the process is killed mid-load, this
+    // persists and HomeScreen detects the crash on next launch.
+    await prefs.setBool('model_load_pending', true);
+    await _loadModel(modelPath);
+  }
+
+  Future<void> _seedCorpus() async {
+    try {
+      await ref.read(syncServiceProvider).seedFromAssets();
+    } catch (e) {
+      debugPrint('Corpus seeding failed: $e');
     }
   }
 
@@ -137,9 +145,7 @@ class _EntryRouterState extends ConsumerState<_EntryRouter> {
   @override
   Widget build(BuildContext context) {
     if (_target == null) {
-      return const Scaffold(
-        body: Center(child: CircularProgressIndicator()),
-      );
+      return const Scaffold(body: Center(child: CircularProgressIndicator()));
     }
     return _target!;
   }

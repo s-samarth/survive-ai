@@ -66,6 +66,11 @@ dependencies:
   sqlite3_flutter_libs: ^0.6.0+eol
   flutter_gemma: ^0.12.5
 
+  # ONNX Runtime — the query encoder for the dense retrieval leg.
+  # Documents are embedded offline and ship as vectors, so this runs one
+  # forward pass over ~10 tokens per turn, not a generation loop.
+  flutter_onnxruntime: ^1.8.4
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
@@ -87,12 +92,21 @@ flutter:
 
   # To add assets to your application, add an assets section, like this:
   assets:
-    - docs/survival_guides/war.md
-    - docs/survival_guides/medical.md
-    - docs/survival_guides/jungle.md
-    - docs/survival_guides/desert.md
-    - docs/survival_guides/urban.md
-    - docs/survival_guides/general.md
+    # Directory form: every guide in docs/survival_guides/ is bundled, so
+    # adding a new DocTopic only means dropping in the matching .md file.
+    - docs/survival_guides/
+    # Chunking and embedding run offline in python/ and ship as artifacts, so
+    # chunk ids — and therefore citations — are identical on every device and
+    # in every eval run, and the phone never embeds a document. Rebuild all
+    # four together (they are only meaningful as a set) with:
+    #   python3 -m survive_rag pack --tokenizer <path to tokenizer.json>
+    - assets/index/corpus.json
+    # Passage vectors: float32, passage order, paired by the manifest's ids.
+    - assets/index/passages.f32
+    - assets/index/passages.f32.json
+    # Gemma's BPE tables, pre-resolved to ids so the device tokenizes the
+    # query without parsing a 33 MB tokenizer.json.
+    - assets/index/tokenizer.bin
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 import '../models/doc_chunk.dart';
 import '../utils/query_expander.dart';
+import '../utils/query_router.dart';
 import 'database_service.dart';
 import 'embedding_service.dart';
 
@@ -11,19 +12,32 @@ import 'embedding_service.dart';
 ///      exact keywords.
 ///   2. **BM25 (expanded)** — FTS5 on a synonym-expanded query. Bridges
 ///      vocabulary gaps (e.g. "bleeding" → "hemorrhage wound tourniquet").
-///   3. **Dense (embedding)** — cosine similarity on vector embeddings.
-///      Currently stubbed (returns empty); when enabled, captures deep
-///      semantic similarity beyond word overlap.
+///   3. **Dense (embedding)** — cosine similarity against EmbeddingGemma
+///      vectors. The corpus is embedded offline and ships with the app; only
+///      the query is encoded here. Captures semantic similarity that no amount
+///      of word overlap reaches, and is worth roughly nine points of Recall@5.
 ///
 /// RRF merges all non-empty ranked lists into a single final ranking.
 /// If only one signal produces results, it degrades gracefully to that
-/// signal alone — no crash or error.
+/// signal alone — no crash or error, and a build without the encoder still
+/// answers on its two lexical legs.
+///
+/// The leg weights are not guesses. They are the configuration measured over
+/// the 382-case retrieval golden set in `python/`, which reaches Recall@5
+/// 90.0% with exactly these numbers; changing one here without rerunning
+/// `python -m evals eval --dense` puts the device somewhere the lab has never
+/// scored.
 class RagService {
   final DatabaseService _db;
   final EmbeddingService _embedder;
 
   /// RRF constant K=60 (standard value from the original RRF paper).
   static const int _rrfK = 60;
+
+  /// Per-leg RRF weights, mirroring `RetrievalConfig` in `python/`.
+  static const double _literalWeight = 1.0;
+  static const double _expandedWeight = 0.7;
+  static const double _denseWeight = 1.5;
 
   /// Number of candidates oversampled from each retrieval leg before RRF merge.
   static const int _candidateLimit = 20;
@@ -60,95 +74,83 @@ class RagService {
           )
         : Future.value(<String>[]);
 
-    // Leg 3: Dense embedding retrieval (when embeddings are computed)
-    final queryVec = await _embedder.embedQuery(query);
+    // Leg 3: Dense embedding retrieval. Skipped entirely when the encoder is
+    // absent — no vector allocated, no similarity scan — and also skipped for
+    // romanised Hindi, which is not a tuning choice but a measured one: on the
+    // Hinglish slice the lexical legs alone score 60.7% and every embedding
+    // model 28-46%, because they are trained on Devanagari and rate "saanp"
+    // barely above noise. Down-weighting rather than dropping still poisons
+    // the ranking, so the routing is binary.
+    final useDense = _embedder.isEnabled && !QueryRouter.hasBridgeTerms(query);
+    final denseIds = useDense
+        ? await denseCandidates(
+            await _embedder.embedQuery(query),
+            topicFilter: topicFilter,
+          )
+        : const <String>[];
 
     final bm25Ids = await bm25Future;
     final semanticIds = await semanticFuture;
-    final denseIds = await _denseRetrieveWithVector(
-      queryVec,
-      topicFilter: topicFilter,
-    );
 
-    // 3-way RRF merge
     final topIds = _rrfMerge(
       rankedLists: [bm25Ids, semanticIds, denseIds],
+      weights: const [_literalWeight, _expandedWeight, _denseWeight],
       topK: topK,
     );
 
     return _db.getChunksByIds(topIds);
   }
 
-  /// Retrieve chunks relevant to multiple topics simultaneously.
+  /// Top embedding cosine for [query], or null when this build has no
+  /// embedder.
   ///
-  /// Embeds the query once, then runs all three retrieval legs per topic
-  /// and merges results with deduplication. The query vector is reused
-  /// across topics to avoid repeated embedding computation.
-  Future<List<DocChunk>> retrieveForSituation(
-    String query,
-    List<String> topics, {
-    int topK = 6,
-  }) async {
+  /// This is the signal the router declines on. It separates where BM25 does
+  /// not: measured over 382 golden-set cases, in-corpus queries score
+  /// 0.30-0.70 and out-of-corpus ones 0.09-0.22, while BM25 overlaps
+  /// completely.
+  ///
+  /// Null means *unknown*, which is not the same as zero. A zero was measured
+  /// and justifies declining; an unknown must not, because refusing on absent
+  /// evidence would turn away emergencies on a build without the embedder.
+  Future<double?> confidence(String query, {String? topicFilter}) async {
+    if (!_embedder.isEnabled) return null;
+
     final queryVec = await _embedder.embedQuery(query);
-    final expandedQuery = QueryExpander.expand(query);
+    if (queryVec.isEmpty) return null;
 
-    final scores = <String, double>{};
+    final embeddings = await _db.getAllEmbeddings(topicFilter: topicFilter);
+    if (embeddings.isEmpty) return null;
 
-    for (final topic in topics) {
-      final perTopicK = topK ~/ topics.length + 1;
-
-      final bm25Ids = await _db.searchFts(
-        query,
-        topicFilter: topic,
-        limit: _candidateLimit,
-      );
-
-      final semanticIds = expandedQuery != query
-          ? await _db.searchFts(
-              expandedQuery,
-              topicFilter: topic,
-              limit: _candidateLimit,
-            )
-          : <String>[];
-
-      final denseIds = await _denseRetrieveWithVector(
-        queryVec,
-        topicFilter: topic,
-      );
-
-      // Accumulate RRF scores across topics (cross-topic re-ranking)
-      final topicMerge = _rrfMerge(
-        rankedLists: [bm25Ids, semanticIds, denseIds],
-        topK: perTopicK,
-      );
-
-      for (var rank = 0; rank < topicMerge.length; rank++) {
-        final id = topicMerge[rank];
-        scores[id] = (scores[id] ?? 0.0) + 1.0 / (rank + 1 + _rrfK);
-      }
+    var best = 0.0;
+    for (final entry in embeddings) {
+      final (_, vec) = entry;
+      final score = EmbeddingService.cosine(queryVec, vec);
+      if (score > best) best = score;
     }
-
-    final sortedIds = scores.keys.toList()
-      ..sort((a, b) => scores[b]!.compareTo(scores[a]!));
-
-    return _db.getChunksByIds(sortedIds.take(topK).toList());
+    return best;
   }
 
   // ---------------------------------------------------------------------------
   // Private helpers
   // ---------------------------------------------------------------------------
 
-  /// Brute-force cosine similarity against all stored embeddings.
+  /// The dense leg alone, best first.
   ///
-  /// The corpus is at most ~300 chunks — O(300 × dims) is sub-millisecond on
-  /// ARM. No approximate nearest-neighbour index is needed.
+  /// Brute-force cosine against every stored embedding. The corpus is ~200
+  /// passages, so O(200 x 768) is sub-millisecond on ARM and no approximate
+  /// nearest-neighbour index is needed.
   ///
-  /// Returns empty list if no embeddings have been computed yet.
-  Future<List<String>> _denseRetrieveWithVector(
+  /// Public because it is the one ranking that is fully determined — same
+  /// vectors, same cosine, same sort as the Python lab — and so the one that
+  /// can be asserted identical in a test. The fused ranking cannot be: its
+  /// lexical legs are FTS5's bm25() here and Okapi BM25 there.
+  ///
+  /// Returns an empty list when nothing has been embedded yet.
+  Future<List<String>> denseCandidates(
     Float32List queryVec, {
     String? topicFilter,
   }) async {
-    if (!EmbeddingService.isComputed(queryVec)) return [];
+    if (queryVec.isEmpty) return const [];
 
     final allEmbeddings = await _db.getAllEmbeddings(topicFilter: topicFilter);
     if (allEmbeddings.isEmpty) return [];
@@ -156,28 +158,30 @@ class RagService {
     final scored = allEmbeddings.map((entry) {
       final (id, vec) = entry;
       return (id, EmbeddingService.cosine(queryVec, vec));
-    }).toList()
-      ..sort((a, b) => b.$2.compareTo(a.$2));
+    }).toList()..sort((a, b) => b.$2.compareTo(a.$2));
 
     return scored.take(_candidateLimit).map((e) => e.$1).toList();
   }
 
   /// Merge N ranked ID lists using Reciprocal Rank Fusion.
   ///
-  ///   score(d) = Σ_i  1 / (rank(d, list_i) + K)
+  ///   score(d) = Σ_i  weight_i / (rank(d, list_i) + K)
   ///
   /// Empty lists are silently skipped — the RRF gracefully degrades to
   /// whichever signals are available.
   List<String> _rrfMerge({
     required List<List<String>> rankedLists,
+    required List<double> weights,
     required int topK,
   }) {
     final scores = <String, double>{};
 
-    for (final list in rankedLists) {
+    for (var leg = 0; leg < rankedLists.length; leg++) {
+      final list = rankedLists[leg];
+      final weight = weights[leg];
       for (var i = 0; i < list.length; i++) {
         final id = list[i];
-        scores[id] = (scores[id] ?? 0.0) + 1.0 / (i + 1 + _rrfK);
+        scores[id] = (scores[id] ?? 0.0) + weight / (i + 1 + _rrfK);
       }
     }
 

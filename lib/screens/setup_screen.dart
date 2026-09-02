@@ -7,9 +7,23 @@ import '../services/download_service.dart';
 import '../services/llm_service.dart';
 import 'home_screen.dart';
 
-const _modelUrl =
-    'https://huggingface.co/ASahu16/gemma/resolve/main/gemma-2b-it-cpu-int4.bin';
-const _modelSizeBytes = 1350000000;
+/// Compiled-in fallback for the model download, used when the manifest is
+/// unreachable (which is the normal case on a first install over a bad link).
+/// The manifest, when it loads, wins — that is how a model upgrade is shipped
+/// without shipping a new APK.
+const _fallbackModelUrl = String.fromEnvironment(
+  'SURVIVE_AI_MODEL_URL',
+  defaultValue:
+      'https://huggingface.co/ASahu16/gemma/resolve/main/gemma-2b-it-cpu-int4.bin',
+);
+const _fallbackModelSizeBytes = 1350000000;
+
+/// Lowercase hex SHA-256 of the fallback model artifact.
+///
+/// Empty means "unknown" — the size check still runs, but a corrupt body
+/// cannot be detected before load. Pin this (or publish `sha256` in the
+/// manifest) for any artifact you control.
+const _fallbackModelSha256 = String.fromEnvironment('SURVIVE_AI_MODEL_SHA256');
 
 /// Handles first-launch setup: WiFi check → model download → doc sync.
 ///
@@ -37,6 +51,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
   }
 
   Future<void> _startSetup() async {
+    if (!mounted) return;
     setState(() {
       _phase = _SetupPhase.checkingConnectivity;
       _statusText = 'Checking connectivity…';
@@ -44,8 +59,7 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
     });
 
     // Check if the model file physically exists on disk
-    final existingPath =
-        await DownloadService().findModelFile(kModelName);
+    final existingPath = await DownloadService().findModelFile(kModelName);
     if (existingPath != null) {
       // File is on disk — just activate and load it
       await _loadModelAndProceed(existingPath);
@@ -70,6 +84,17 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
   Future<void> _downloadModel() async {
     try {
+      // Prefer the manifest's model entry so the model can be upgraded without
+      // an APK release; fall back to the compiled-in constants when offline or
+      // the manifest is unreachable.
+      final syncService = ref.read(syncServiceProvider);
+      final remote = await syncService.fetchModelInfo();
+      final url = remote?.url ?? _fallbackModelUrl;
+      final sizeBytes = remote?.sizeBytes ?? _fallbackModelSizeBytes;
+      final checksum =
+          remote?.sha256 ??
+          (_fallbackModelSha256.isEmpty ? null : _fallbackModelSha256);
+
       // ── Download ──────────────────────────────────────────────────────────
       setState(() {
         _phase = _SetupPhase.downloadingModel;
@@ -79,12 +104,13 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       final downloader = DownloadService();
       final localPath = await downloader.download(
-        url: _modelUrl,
+        url: url,
         filename: kModelName,
         subfolder: 'models',
-        expectedBytes: _modelSizeBytes,
+        expectedBytes: sizeBytes,
+        expectedSha256: checksum,
         onProgress: (done, total) {
-          if (total > 0) setState(() => _progress = done / total);
+          if (total > 0 && mounted) setState(() => _progress = done / total);
         },
       );
 
@@ -95,12 +121,11 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
         _progress = 0;
       });
 
-      final syncService = ref.read(syncServiceProvider);
       try {
         await syncService.seedFromAssets();
         await syncService.syncNow(
           onProgress: (done, total) {
-            if (total > 0) setState(() => _progress = done / total);
+            if (total > 0 && mounted) setState(() => _progress = done / total);
           },
         );
       } catch (_) {
@@ -110,9 +135,12 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       await _loadModelAndProceed(localPath);
     } catch (e) {
+      if (!mounted) return;
       setState(() {
         _phase = _SetupPhase.error;
-        _error = e.toString();
+        _error = e is ChecksumMismatchException
+            ? 'The download was corrupted. Tap Retry to download it again.'
+            : e.toString();
         _statusText = 'Setup failed';
       });
     }
@@ -136,12 +164,18 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
 
       await prefs.setBool('model_load_pending', false);
       ref.read(llmReadyProvider.notifier).state = true;
+      ref.read(llmErrorProvider.notifier).state = null;
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (_) => const HomeScreen()),
         );
       }
     } catch (e) {
+      // Reaching the catch means a normal exception, not an OOM SIGKILL, so
+      // clear the crash flag or HomeScreen shows a spurious repair banner.
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setBool('model_load_pending', false);
+      if (!mounted) return;
       setState(() {
         _phase = _SetupPhase.error;
         _error = e.toString();
@@ -163,8 +197,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
                 _phase == _SetupPhase.error
                     ? Icons.error_outline
                     : _phase == _SetupPhase.waitingForWifi
-                        ? Icons.wifi_off
-                        : Icons.downloading,
+                    ? Icons.wifi_off
+                    : Icons.downloading,
                 size: 64,
                 color: _phase == _SetupPhase.error
                     ? Colors.red

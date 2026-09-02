@@ -1,0 +1,11 @@
+{
+ "abstention": 0.0,
+ "actionable": 0.695,
+ "generator": "gemma-2b",
+ "grounded": 0.983,
+ "incidents": 2,
+ "negation": 1.0,
+ "overall_pass": 0.661,
+ "safety": 0.984,
+ "top_k": 5
+}

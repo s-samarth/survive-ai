@@ -1,9 +1,201 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:survive_ai/models/chat_message.dart';
 import 'package:survive_ai/models/doc_chunk.dart';
+import 'package:survive_ai/services/llm_service.dart';
 import 'package:survive_ai/utils/prompt_builder.dart';
 
 void main() {
+  DocChunk chunk(String id, String body) => DocChunk(
+    id: id,
+    docId: 'doc',
+    topic: 'medical',
+    headingPath: 'Part 1',
+    body: body,
+    chunkIndex: 0,
+  );
+
+  /// Same heuristic PromptBuilder uses internally: words x 1.3, rounded up.
+  int estimateTokens(String text) =>
+      (text.split(RegExp(r'\s+')).length * 1.3).ceil();
+
+  group('PromptBuilder context budget', () {
+    test('oversized context is trimmed, never discarded wholesale', () {
+      // The bug this guards: when the reference block did not fit, the whole
+      // block was dropped and the model answered from pretraining with nothing
+      // retrieved — silent, and invisible to every metric that does not look
+      // at the prompt.
+      final chunks = List.generate(8, (i) => chunk('c$i', 'word ' * 400));
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: chunks,
+        history: [],
+        userMessage: 'what do I do',
+      );
+
+      expect(prompt, contains('Reference information'));
+      expect(estimateTokens(prompt), lessThanOrEqualTo(kMaxPromptTokens));
+    });
+
+    test('keeps the best chunks and drops the tail', () {
+      final chunks = List.generate(8, (i) => chunk('c$i', 'body$i ' * 200));
+
+      final selected = PromptBuilder.selectContextChunks(
+        chunks: chunks,
+        history: [],
+        userMessage: 'what do I do',
+      );
+
+      expect(selected, isNotEmpty);
+      expect(selected.length, lessThan(chunks.length));
+      expect(selected.first.id, 'c0');
+    });
+
+    test('always keeps at least one chunk', () {
+      // An oversized best chunk still beats sending nothing at all.
+      final selected = PromptBuilder.selectContextChunks(
+        chunks: [chunk('huge', 'word ' * 5000)],
+        history: [],
+        userMessage: 'what do I do',
+      );
+
+      expect(selected, hasLength(1));
+    });
+
+    test('history is never crowded out by a long reference block', () {
+      final chunks = List.generate(8, (i) => chunk('c$i', 'word ' * 400));
+      final history = [
+        ChatMessage(
+          role: 'user',
+          content: 'first question',
+          timestamp: DateTime.now(),
+        ),
+        ChatMessage(
+          role: 'assistant',
+          content: 'first answer',
+          timestamp: DateTime.now(),
+        ),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: chunks,
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      expect(prompt, contains('Reference information'));
+      expect(prompt, contains('Previous exchange'));
+      expect(estimateTokens(prompt), lessThanOrEqualTo(kMaxPromptTokens));
+    });
+
+    test('more retrieved chunks never means less context', () {
+      // The precise shape of the old bug: raising top_k collapsed the prompt.
+      String promptFor(int n) => PromptBuilder.buildChatPrompt(
+        chunks: List.generate(n, (i) => chunk('c$i', 'word ' * 300)),
+        history: [],
+        userMessage: 'what do I do',
+      );
+
+      expect(
+        estimateTokens(promptFor(8)),
+        greaterThanOrEqualTo(estimateTokens(promptFor(4))),
+      );
+    });
+
+    test('citations can only reference chunks the model actually saw', () {
+      final chunks = List.generate(10, (i) => chunk('c$i', 'word ' * 300));
+
+      final selected = PromptBuilder.selectContextChunks(
+        chunks: chunks,
+        history: [],
+        userMessage: 'what do I do',
+      );
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: chunks,
+        history: [],
+        userMessage: 'what do I do',
+      );
+
+      for (final c in selected) {
+        expect(prompt, contains(c.body.substring(0, 20)));
+      }
+    });
+  });
+
+  group('PromptBuilder history budget', () {
+    ChatMessage msg(String role, String content) =>
+        ChatMessage(role: role, content: content, timestamp: DateTime.now());
+
+    test('keeps the most recent turns, not the oldest', () {
+      // The bug this guards: history filled oldest-first and stopped at the
+      // budget, so a tight budget kept the OLDEST turns and dropped the
+      // newest — exactly backwards for a follow-up, which depends on the
+      // last exchange.
+      final history = [
+        msg('user', 'oldest question ' * 60),
+        msg('assistant', 'oldest answer ' * 60),
+        msg('user', 'MOST RECENT QUESTION'),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [chunk('c', 'word ' * 300)],
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      expect(prompt, contains('MOST RECENT QUESTION'));
+    });
+
+    test('history stays in chronological order', () {
+      final history = [
+        msg('user', 'first question'),
+        msg('assistant', 'first answer'),
+        msg('user', 'second question'),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [],
+        history: history,
+        userMessage: 'third',
+      );
+
+      expect(
+        prompt.indexOf('first question'),
+        lessThan(prompt.indexOf('second question')),
+      );
+    });
+
+    test('answers are trimmed harder than questions', () {
+      // Questions are short and load-bearing; answers are long and the model
+      // can restate them. It cannot recover a question it never saw.
+      final history = [
+        msg('user', 'Q' * 500),
+        msg('assistant', 'A' * 500),
+      ];
+
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [],
+        history: history,
+        userMessage: 'follow up',
+      );
+
+      final questionRun = RegExp(r'Q+').allMatches(prompt).map((m) => m.end - m.start);
+      final answerRun = RegExp(r'A+').allMatches(prompt).map((m) => m.end - m.start);
+      expect(questionRun.reduce((a, b) => a > b ? a : b),
+          greaterThan(answerRun.reduce((a, b) => a > b ? a : b)));
+    });
+
+    test('the last turn survives even when oversized', () {
+      // A follow-up with no history at all is unanswerable.
+      final prompt = PromptBuilder.buildChatPrompt(
+        chunks: [chunk('c', 'word ' * 400)],
+        history: [msg('user', 'a very long question ' * 80)],
+        userMessage: 'and then?',
+      );
+
+      expect(prompt, contains('Previous exchange'));
+    });
+  });
+
   group('PromptBuilder.buildChatPrompt', () {
     test('does not include turn markers (flutter_gemma adds them)', () {
       final prompt = PromptBuilder.buildChatPrompt(
@@ -61,11 +253,14 @@ void main() {
     });
 
     test('trims history to last 4 turns', () {
-      final history = List.generate(10, (i) => ChatMessage(
-        role: i.isEven ? 'user' : 'assistant',
-        content: 'Message $i',
-        timestamp: DateTime.now(),
-      ));
+      final history = List.generate(
+        10,
+        (i) => ChatMessage(
+          role: i.isEven ? 'user' : 'assistant',
+          content: 'Message $i',
+          timestamp: DateTime.now(),
+        ),
+      );
 
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],

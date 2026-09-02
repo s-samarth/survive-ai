@@ -38,35 +38,72 @@ DatabaseService (SQLite) + flutter_gemma (MediaPipe LLM) + HTTP
 /files/models/gemma-2b-it-cpu-int4.bin  |  /files/docs/{topic}/*.md  |  survive_ai.db
 ```
 
+**Scope: India.** The corpus, the emergency numbers, the query-expansion
+vocabulary (including romanised Hindi), and the topic taxonomy are all
+India-specific by design. Do not genericise them.
+
 **No business logic in widgets.** Widgets read from providers and dispatch to services only.
 
 ## Design Principle: Speed Over Sophistication
 
-This app runs on 4GB Android devices in survival emergencies. Every design decision prioritizes fast, correct answers over architectural elegance:
-- **2B model** over larger models (first token in <3s vs 10+s)
-- **BM25 + query expansion** over neural embeddings (zero extra memory vs 200MB+ OOM)
+**Target device: 6 GB RAM minimum, 8 GB recommended.** Every design decision
+prioritises fast, correct answers over architectural elegance:
+- **2B model** over larger models (first token in seconds, not tens of seconds)
+- **Everything expensive precomputed** — chunking and corpus embedding run offline in `python/`; the phone encodes only the query
 - **Instruction-last prompts** over long system prompts (2B models forget early instructions)
-- **CPU backend** over GPU (pageable RAM vs shared memory OOM on 4GB devices)
+- **CPU backend** over GPU (pageable RAM vs a shared pool the OS cannot reclaim)
+- **No reranker** — Recall@20 is 98%, so a cross-encoder is 100 MB+ and a second forward pass for 8 points of ordering
 
 ## Key Patterns
 
-**RAG pipeline (2-leg BM25 + RRF):** Query → (1) BM25 exact match via FTS5 + (2) BM25 on synonym-expanded query via QueryExpander → Reciprocal Rank Fusion merge (K=60) → top 4 chunks → injected as reference material in prompt → Gemma generates response. Trivial queries (< 3 words) skip RAG entirely to avoid confusing the model with irrelevant context.
+**RAG pipeline (3-leg + weighted RRF):** Query → (1) BM25 exact via FTS5,
+weight 1.0 + (2) BM25 on the synonym-expanded query, weight 0.7 + (3) cosine
+against shipped EmbeddingGemma vectors, weight 1.5 (skipped entirely for
+romanised Hindi) → RRF merge (K=60) → top 5 passages → prompt → Gemma. The
+turn is owned by `ChatTurnService`, not the widget.
 
-**Query expansion:** `QueryExpander` in `lib/utils/query_expander.dart` maps 130+ survival-domain terms to synonyms/related terms (e.g. "bleeding" → "hemorrhage wound tourniquet"). This bridges vocabulary gaps between user language and medical/survival terminology without requiring a neural embedding model. Expansion capped at 8 terms to avoid query dilution.
+**FTS5 query construction is not optional.** FTS5's implicit operator between
+bare terms is **AND**, so passing a raw sentence to `MATCH` requires every word
+to appear in one chunk and returns nothing for real questions. All queries go
+through `DatabaseService.buildMatchExpression`, which strips stopwords, quotes
+each term (so FTS5 keywords like `OR`/`NEAR` are not parsed as syntax), and
+OR-joins them. There is a regression test; do not bypass this helper.
+
+**`chunks_fts` is an external-content FTS5 table maintained by triggers.** Write
+only to `chunks`. Never insert into `chunks_fts` directly, and never use
+`ConflictAlgorithm.replace` on `chunks` — SQLite's REPLACE skips DELETE
+triggers, orphaning the old index row and appending a duplicate.
+
+**Query expansion:** `QueryExpander` (`lib/utils/query_expander.dart`) with its vocabulary in `lib/utils/expansion_terms.dart` maps survival-domain terms, romanised Hindi ("khoon" → blood, "aag" → fire, "saanp" → snake), and India-specific nouns (LPG, lathi, nala, ORS, ASV) onto the English terms the corpus uses. Without the Hinglish entries, a large share of real Indian queries retrieve nothing. Expansion is capped at 10 terms to avoid query dilution.
 
 **Prompt structure (optimized for 2B):** Prompt is built in `lib/utils/prompt_builder.dart` as plain text (no turn markers — flutter_gemma adds those automatically). Layout is instruction-last: (1) RAG reference material first, (2) conversation history, (3) short instruction (~60 tokens) RIGHT BEFORE the question, (4) question last. This structure ensures the 2B model's attention is focused on the instruction when it starts generating.
 
 **LLM isolation:** All `flutter_gemma` calls go through `LlmService` only. UI never touches the model directly. `flutter_gemma` manages its own background isolate for inference.
 
-**Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend to avoid shared GPU/RAM exhaustion on 4 GB devices. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
+**Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend because GPU inference draws from a shared pool the OS cannot reclaim under pressure. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
 
 **Offline-first:** No cloud calls at runtime. WiFi-gated sync fetches a `manifest.json` from GitHub, downloads changed Markdown docs, re-indexes via chunker → FTS5.
 
-**Embedding service (stub):** `EmbeddingService` exists but always returns empty results. `RagService` has full 3-way RRF retrieval logic (BM25 exact + BM25 expanded + dense) but the dense leg returns empty since embeddings are disabled. This is intentional — any additional ML runtime alongside Gemma causes OOM on 4 GB devices. The infrastructure is ready for when device capabilities improve.
+**Embedding service (disabled):** `EmbeddingService.isEnabled` is false, so `RagService` skips the dense leg entirely — no vector is allocated on the query path. Intentional: a second native ML runtime alongside Gemma does not fit the memory budget on a 4-6 GB device. `EmbeddingGemma-300m` runs in under 200 MB and is the candidate for enabling it; the plumbing is a one-flag change.
 
-**Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts` (FTS5 virtual table for BM25). The `chunks` table has an `embedding BLOB` column reserved for future dense retrieval.
+**Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts`
+(FTS5 virtual table for BM25) + `citations`. The `chunks.embedding` BLOB holds
+the passage vector that shipped with the index.
 
-**Zero-Wait RAG:** On first install, survival guides bundled as Flutter assets are seeded into the database immediately so the app has expert knowledge before any network sync.
+**Store the view's own window, not `.buffer`.** Vectors arrive as slices of one
+large file-backed buffer, and `Float32List.buffer` returns the whole backing
+store — writing `embedding.buffer.asUint8List()` gave every passage the entire
+603 KB vector file. Nothing threw: cosine saw mismatched lengths, returned 0.0
+for every pair, and the dense leg ranked every query identically.
+
+**`DatabaseService` takes an optional `databasePath` so tests can drive the
+real class.** They previously rebuilt the schema by hand, so `insertChunks`,
+`deleteChunksForDoc` and `searchFts` were never executed by anything — all
+three named a `chunk_id` column the FTS table does not have, and keyword search
+could not return a row on a device while every test passed. Test through
+`DatabaseService`, not around it.
+
+**Zero-Wait RAG:** `SyncService.seedFromAssets()` runs from `main.dart` on **every** launch, independent of the model. It is idempotent (skips topics already at `bundledVersion`). Do not move it back behind the model-download flow — a sideloaded or already-present model then leaves the corpus permanently empty. Bump `SyncService.bundledVersion` whenever the shipped Markdown changes.
 
 ## State Management (Riverpod 2.x)
 
@@ -80,8 +117,9 @@ This app runs on 4GB Android devices in survival emergencies. Every design decis
 - `lib/services/` — all business logic (no Flutter imports where avoidable)
 - `lib/models/` — pure data classes (`ChatMessage`, `DocChunk`, `DocManifest`)
 - `lib/providers/providers.dart` — Riverpod wiring, singleton lifecycle
+- `lib/models/doc_topic.dart` — the 18 India situations; single source of truth for asset paths, DB topic keys, and RAG filters
 - `lib/utils/prompt_builder.dart` — Instruction-last prompt template for 2B model
-- `lib/utils/query_expander.dart` — Domain-specific synonym expansion (130+ terms)
+- `lib/utils/query_expander.dart` + `expansion_terms.dart` — synonym and Hinglish expansion
 - `lib/screens/` — one file per full-page route
 - `lib/widgets/` — reusable UI components (`MessageBubble`, `SyncStatusBanner`)
 
@@ -90,6 +128,13 @@ This app runs on 4GB Android devices in survival emergencies. Every design decis
 - Gemma 2B IT, INT4 quantized, CPU backend via `flutter_gemma` (MediaPipe LLM Inference)
 - Model file: `gemma-2b-it-cpu-int4.bin` (~500 MB)
 - Sampling: temp=0.7, top_k=40
-- Max output tokens: 512
-- Token budget: 4096 context − 512 output − 84 safety = 3500 max prompt tokens
-- Android: `minSdk 24`, `abiFilters: ["arm64-v8a"]`
+- **`maxTokens` in flutter_gemma is the FULL context window (prompt + reply), not an output cap.** It is `kContextTokens` in `llm_service.dart`.
+- Token budget: `kMaxPromptTokens` = 2048 context − 512 reserved output − 84 safety = 1452 prompt tokens. `PromptBuilder` derives its budget from this constant so the two cannot drift.
+- Android: `minSdk 24`, `abiFilters: ["arm64-v8a"]`, `largeHeap="true"`
+
+## Content and model updates
+
+Both are driven by `manifest.json`, not by an APK release:
+- Manifest URL: `kManifestUrl` in `sync_service.dart`, overridable with `--dart-define=SURVIVE_AI_MANIFEST_URL=...`
+- The manifest's `model` entry (url, size_bytes, sha256, version) wins over the compiled-in fallbacks in `setup_screen.dart`, so the model can be swapped without shipping a build.
+- Model downloads are resumable and verified: size check, then streaming SHA-256. A partial download is only resumed when its sidecar `.part.json` proves it came from the same URL and expected content.

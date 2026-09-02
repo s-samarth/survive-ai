@@ -1,0 +1,28 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "survive-rag"
+version = "0.1.0"
+description = "Offline RAG lab and eval harness for the Survive AI India corpus"
+requires-python = ">=3.11"
+dependencies = []          # intentionally zero third-party deps
+
+[project.optional-dependencies]
+dense = ["numpy>=1.26", "onnxruntime>=1.17", "tokenizers>=0.15"]  # query encoder
+# The lab only. Never installed on a device, never imported by survive_rag.
+lab = ["numpy>=1.26", "sentence-transformers>=3.0", "pytest", "ruff"]
+
+[project.scripts]
+survive-rag = "survive_rag.cli:main"
+survive-evals = "evals.cli:main"
+
+# Only survive_rag is a distributable package. `evals` is lab apparatus: it
+# lives beside the library, imports it, and is never installed or shipped.
+[tool.setuptools.packages.find]
+include = ["survive_rag*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
