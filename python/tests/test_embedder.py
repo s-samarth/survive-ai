@@ -12,7 +12,9 @@ import os
 
 import pytest
 
-from survive_rag.retrieval.embedder import MODELS, ModelSpec
+# From the specs module, not the backends one: the registry is pure data,
+# while importing the backends pulls in numpy, which CI does not install.
+from survive_rag.retrieval.embedder_specs import MODELS, ModelSpec
 
 NETWORK = os.environ.get("SURVIVE_RAG_NETWORK_TESTS") == "1"
 needs_network = pytest.mark.skipif(not NETWORK, reason="set SURVIVE_RAG_NETWORK_TESTS=1")

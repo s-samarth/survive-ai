@@ -48,6 +48,31 @@ FORMAT_VERSION = 1
 # reaches BPE as one piece -- there is no word-boundary step to reproduce.
 SPACE = "▁"
 
+# Deliberately awkward strings, used to pin the Dart port to this one. A
+# tokeniser that handles ordinary English and nothing else passes a test and
+# then mangles the first Hinglish query, so these carry what the corpus and the
+# golden sets actually contain: romanised Hindi, Devanagari, emoji, and
+# whitespace that BPE treats specially.
+FIXTURE_TEXTS: tuple[str, ...] = (
+    "",
+    " ",
+    "  double  space  ",
+    "\n\ttabs and newlines\n",
+    "chest pain",
+    "snake bite what to do",
+    "task: search result | query: aag lag gayi hai",
+    "title: none | text: Do not cut the bite or suck the venom.",
+    "kutte ne kaata, haldi lagau kya",
+    "baadh aa gayi hai kya karu",
+    "सांप ने काटा क्या करूँ",
+    "LPG cylinder leak in the kitchen",
+    "ORS ka packet kaise banaye",
+    "call 112 immediately",
+    "🔥🐍 emoji and symbols ±§",
+    "café naïve façade",
+    "a" * 200,
+)
+
 
 def _load(tokenizer_json: Path) -> dict:
     """Read ``tokenizer.json`` and check it is the BPE shape we support.

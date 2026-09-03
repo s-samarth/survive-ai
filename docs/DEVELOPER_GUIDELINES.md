@@ -158,6 +158,12 @@ Theme(data: ThemeData(colorScheme: scheme), child: child)
 
 ### Testing
 
+**CI pins Flutter to 3.41.4.** `dart format --set-exit-if-changed` is part of
+the build, and an unpinned `stable` channel means its rules change under the
+repository without anyone committing — a build goes red on code nobody touched.
+Match that version locally, and treat a bump as a deliberate change: upgrade,
+run `dart format .`, and commit the reformat alongside it.
+
 ```bash
 flutter test                                        # 116 tests
 flutter analyze                                     # zero warnings enforced

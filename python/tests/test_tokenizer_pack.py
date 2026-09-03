@@ -12,8 +12,7 @@ from pathlib import Path
 
 import pytest
 
-from survive_rag.corpus.artifacts import FIXTURE_TEXTS
-from survive_rag.retrieval.tokenizer_pack import pack_tokenizer
+from survive_rag.retrieval.tokenizer_pack import FIXTURE_TEXTS, pack_tokenizer
 from survive_rag.retrieval.tokenizer_ref import encode, read_packed
 
 ASSETS = Path(__file__).resolve().parents[2] / "assets" / "index"

@@ -41,7 +41,6 @@ from pathlib import Path
 
 from survive_rag.config import RECOMMENDED
 from survive_rag.corpus.loader import load_corpus
-from survive_rag.retrieval.embedder import load_embedder
 from survive_rag.retrieval.pipeline import Retriever
 
 from ..harness.goldset import load_goldset
@@ -55,6 +54,12 @@ DENSE_K = 8
 
 def cmd_parity(args: argparse.Namespace) -> int:
     """Write query vectors and expected rankings for the Dart parity test."""
+    # Imported here rather than at module scope. `evals/cli.py` imports every
+    # command to register it, so a top-level import of the embedding backend
+    # would pull numpy into `evals validate` and every other lexical command --
+    # and CI runs those with nothing installed.
+    from survive_rag.retrieval.embedder import load_embedder
+
     config = RECOMMENDED.with_(
         use_dense_leg=True,
         embed_model=args.embed_model,

@@ -13,8 +13,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned, not `channel: stable`. An unpinned channel means the formatter
+      # and analyzer rules change under the repository without a commit, and
+      # `dart format --set-exit-if-changed` then fails a build that nobody
+      # touched — which is exactly how this job went red. Bumping this is a
+      # deliberate act: run `dart format .` and commit the result with it.
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.41.4'
           channel: 'stable'
           cache: true
 
@@ -37,8 +43,14 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      # Pinned, not `channel: stable`. An unpinned channel means the formatter
+      # and analyzer rules change under the repository without a commit, and
+      # `dart format --set-exit-if-changed` then fails a build that nobody
+      # touched — which is exactly how this job went red. Bumping this is a
+      # deliberate act: run `dart format .` and commit the result with it.
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.41.4'
           channel: 'stable'
           cache: true
 

@@ -14,35 +14,11 @@ import json
 from pathlib import Path
 
 from ..config import RetrievalConfig
-from ..retrieval.tokenizer_pack import pack_tokenizer
+from ..retrieval.tokenizer_pack import FIXTURE_TEXTS, pack_tokenizer
 from ..retrieval.tokenizer_ref import encode, read_packed
 from .loader import export_index, load_corpus
-from .vectors import export_vectors
 
-# Deliberately awkward strings. A tokeniser that handles ordinary English and
-# nothing else passes an eval and then mangles the first Hinglish query, so the
-# fixture carries what the corpus and the golden sets actually contain:
-# romanised Hindi, Devanagari, emoji, and whitespace that BPE treats specially.
-FIXTURE_TEXTS: tuple[str, ...] = (
-    "",
-    " ",
-    "  double  space  ",
-    "\n\ttabs and newlines\n",
-    "chest pain",
-    "snake bite what to do",
-    "task: search result | query: aag lag gayi hai",
-    "title: none | text: Do not cut the bite or suck the venom.",
-    "kutte ne kaata, haldi lagau kya",
-    "baadh aa gayi hai kya karu",
-    "सांप ने काटा क्या करूँ",
-    "LPG cylinder leak in the kitchen",
-    "ORS ka packet kaise banaye",
-    "call 112 immediately",
-    "🔥🐍 emoji and symbols ±§",
-    "café naïve façade",
-    "a" * 200,
-)
-
+__all__ = ["FIXTURE_TEXTS", "build_artifacts", "write_fixture"]
 
 def build_artifacts(
     tokenizer_json: Path,
@@ -64,6 +40,11 @@ def build_artifacts(
     Returns:
         Artifact name to the path written.
     """
+    # Imported here, not at module scope: the exporter pulls in numpy through
+    # the embedding backend, and importing it eagerly would put a third-party
+    # dependency on a path that is meant to stay free of them.
+    from .vectors import export_vectors
+
     corpus = load_corpus(cfg=config.chunking, passages=config.passages)
 
     index = export_index(corpus, assets / "corpus.json")
