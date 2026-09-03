@@ -196,10 +196,21 @@ Create the keystore once, and **keep it somewhere you will not lose it** — an
 app signed with a different key cannot update one signed with this one, and
 every user would have to uninstall and reinstall.
 
+`keytool` ships with a JDK, which macOS does not have by default:
+
+```bash
+brew install --cask temurin
+```
+
 ```bash
 keytool -genkey -v -keystore release-keystore.jks \
   -keyalg RSA -keysize 2048 -validity 10000 -alias survive-ai
 ```
+
+**Do this before sharing any build, not after.** Android refuses an update
+signed with a different key than the installed app, so anyone who installs a
+debug-signed APK today has to uninstall — losing their downloaded model and
+chat history — before they can install a properly signed one later.
 
 Then set four repository secrets under **Settings → Secrets and variables →
 Actions**:

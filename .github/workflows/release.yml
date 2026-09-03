@@ -87,8 +87,26 @@ jobs:
       - name: Test
         run: flutter test
 
+      # The version has to come from the tag, not from pubspec.yaml. Left to
+      # pubspec every release would build as versionName 1.0.0 with versionCode
+      # 1, and Android does not treat an equal versionCode as an upgrade — so
+      # v1.0.1 would not install over v1.0.0 on a phone that already had it.
+      # build-number is the workflow run number, which only ever increases.
       - name: Build release APK
-        run: flutter build apk --release --target-platform android-arm64
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          flutter build apk --release --target-platform android-arm64 \
+            --build-name="${TAG#v}" \
+            --build-number="${{ github.run_number }}"
+
+      - name: Report what was built
+        run: |
+          echo "versionName: ${TAG#v}"
+          unzip -l build/app/outputs/flutter-apk/app-release.apk \
+            | grep -cE 'assets/flutter_assets/assets/index' \
+            | xargs -I{} echo "index assets present: {} of 4"
+        env:
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
 
       - name: Checksum and rename
         id: artifact
