@@ -130,6 +130,18 @@ output beats trusting that a secret was wired up correctly.
   which is a poor trade in an emergency.
 - **Nothing has run on real hardware yet.** See [TESTING.md](TESTING.md).
 
+### APK contents
+
+The release APK is arm64-v8a only and carries no code for architectures it
+cannot run on. `abiFilters` trims Flutter's own engine but not native libraries
+inside third-party AARs, so MediaPipe and ONNX Runtime were each shipping every
+ABI: 268 MB before excluding them in packaging, 172 MB after, verified by
+inspecting the built artifact rather than by reasoning about the config.
+
+Smaller is a security property here as well as a bandwidth one. The app is
+installed over patchy connections by people who will not retry a failed 268 MB
+download, and unreachable native code is attack surface with no upside.
+
 ---
 
 ## Reporting a vulnerability

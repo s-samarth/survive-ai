@@ -49,8 +49,8 @@ android {
             // libraries that arrive inside third-party AARs. MediaPipe and ONNX
             // Runtime each ship every ABI, so a build that already declared
             // itself arm64-only was carrying x86_64 and armeabi-v7a copies of
-            // both — measured at roughly 90 MB of an APK that has no way to run
-            // on those architectures.
+            // both, for architectures it cannot run on. Measured on the CI
+            // artifact: 268 MB before, 172 MB after.
             excludes += listOf("lib/x86/**", "lib/x86_64/**", "lib/armeabi-v7a/**")
         }
     }
