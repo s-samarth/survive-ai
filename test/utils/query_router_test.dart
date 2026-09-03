@@ -86,7 +86,10 @@ void main() {
     });
 
     test('thresholds are ordered', () {
-      expect(QueryRouter.capabilityVeto, greaterThan(QueryRouter.answerThreshold));
+      expect(
+        QueryRouter.capabilityVeto,
+        greaterThan(QueryRouter.answerThreshold),
+      );
     });
   });
 

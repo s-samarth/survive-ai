@@ -167,10 +167,7 @@ void main() {
     test('answers are trimmed harder than questions', () {
       // Questions are short and load-bearing; answers are long and the model
       // can restate them. It cannot recover a question it never saw.
-      final history = [
-        msg('user', 'Q' * 500),
-        msg('assistant', 'A' * 500),
-      ];
+      final history = [msg('user', 'Q' * 500), msg('assistant', 'A' * 500)];
 
       final prompt = PromptBuilder.buildChatPrompt(
         chunks: [],
@@ -178,10 +175,16 @@ void main() {
         userMessage: 'follow up',
       );
 
-      final questionRun = RegExp(r'Q+').allMatches(prompt).map((m) => m.end - m.start);
-      final answerRun = RegExp(r'A+').allMatches(prompt).map((m) => m.end - m.start);
-      expect(questionRun.reduce((a, b) => a > b ? a : b),
-          greaterThan(answerRun.reduce((a, b) => a > b ? a : b)));
+      final questionRun = RegExp(
+        r'Q+',
+      ).allMatches(prompt).map((m) => m.end - m.start);
+      final answerRun = RegExp(
+        r'A+',
+      ).allMatches(prompt).map((m) => m.end - m.start);
+      expect(
+        questionRun.reduce((a, b) => a > b ? a : b),
+        greaterThan(answerRun.reduce((a, b) => a > b ? a : b)),
+      );
     });
 
     test('the last turn survives even when oversized', () {

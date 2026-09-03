@@ -141,7 +141,9 @@ class OnnxEmbeddingService extends EmbeddingService {
       });
       final vector = await outputs[outputName]?.asFlattenedList();
       if (vector == null) return Float32List(0);
-      return Float32List.fromList(vector.cast<num>().map((v) => v.toDouble()).toList());
+      return Float32List.fromList(
+        vector.cast<num>().map((v) => v.toDouble()).toList(),
+      );
     } catch (error) {
       debugPrint('Embedding failed for a ${ids.length}-token input: $error');
       return Float32List(0);

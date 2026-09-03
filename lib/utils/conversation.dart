@@ -45,13 +45,77 @@ class Conversation {
 
   /// Words that carry no topic and would only dilute the query.
   static const _stopwords = {
-    'a', 'an', 'and', 'are', 'as', 'at', 'be', 'but', 'by', 'can', 'do',
-    'does', 'for', 'from', 'had', 'has', 'have', 'he', 'her', 'him', 'his',
-    'how', 'i', 'if', 'in', 'is', 'it', 'its', 'me', 'my', 'no', 'not', 'of',
-    'on', 'or', 'our', 'out', 'she', 'should', 'so', 'that', 'the', 'their',
-    'them', 'then', 'there', 'they', 'this', 'to', 'up', 'was', 'we', 'were',
-    'what', 'when', 'where', 'which', 'who', 'why', 'will', 'with', 'you',
-    'your', 'am', 'been', 'being', 'did', 'get', 'got', 'us', 'about',
+    'a',
+    'an',
+    'and',
+    'are',
+    'as',
+    'at',
+    'be',
+    'but',
+    'by',
+    'can',
+    'do',
+    'does',
+    'for',
+    'from',
+    'had',
+    'has',
+    'have',
+    'he',
+    'her',
+    'him',
+    'his',
+    'how',
+    'i',
+    'if',
+    'in',
+    'is',
+    'it',
+    'its',
+    'me',
+    'my',
+    'no',
+    'not',
+    'of',
+    'on',
+    'or',
+    'our',
+    'out',
+    'she',
+    'should',
+    'so',
+    'that',
+    'the',
+    'their',
+    'them',
+    'then',
+    'there',
+    'they',
+    'this',
+    'to',
+    'up',
+    'was',
+    'we',
+    'were',
+    'what',
+    'when',
+    'where',
+    'which',
+    'who',
+    'why',
+    'will',
+    'with',
+    'you',
+    'your',
+    'am',
+    'been',
+    'being',
+    'did',
+    'get',
+    'got',
+    'us',
+    'about',
   };
 
   static final _token = RegExp(r"[a-z0-9']+");
@@ -61,7 +125,10 @@ class Conversation {
 
   /// The most recent user messages, oldest first.
   static List<String> _recentUserTurns(List<ChatMessage> history, int limit) {
-    final users = history.where((m) => m.role == 'user').map((m) => m.content).toList();
+    final users = history
+        .where((m) => m.role == 'user')
+        .map((m) => m.content)
+        .toList();
     return users.length <= limit ? users : users.sublist(users.length - limit);
   }
 

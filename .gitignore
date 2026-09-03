@@ -55,10 +55,9 @@ android/key.properties
 # Agent temp files
 .tmp/
 
-# Generated, and only meaningful as a set — the index, the passage vectors and
-# the packed tokenizer must come from one run of one command:
+# assets/index/ is deliberately NOT ignored. It is generated output, but it is
+# also what the parity tests compare against — and those tests skip rather than
+# fail when it is absent, so ignoring it made a green CI run mean nothing. It is
+# ~7 MB, and the files are Gemma derivatives; see NOTICE.md. Rebuild with:
 #   python3 -m survive_rag pack --tokenizer <embeddinggemma tokenizer.json>
-# A build without them still works; retrieval falls back to runtime chunking
-# and the two lexical legs. The Dart parity tests skip rather than fail, so a
-# green suite on a fresh clone does not mean they ran.
-assets/index/
+#   python3 -m evals parity

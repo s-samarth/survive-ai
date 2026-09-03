@@ -130,10 +130,20 @@ parent granularity honestly rather than re-labelling three times and hoping.
 `evals eval --sweep <name>` runs a named A/B — `models` for the embedding
 bake-off, and others in `evals/sweeps.py`. Reports render to text or HTML.
 
-`--save-baseline` records a run in `evals/baselines/`. The recorded retrieval
-baseline is the **shipping** configuration (EmbeddingGemma, ONNX, dense on), so
-a regression check compares against what a device runs, not against a lab
-convenience.
+`--save-baseline` records a run in `evals/baselines/`, and `--baseline <name>`
+selects which one. There are two for retrieval, because they answer to
+different runners:
+
+| baseline | configuration | who compares against it |
+|---|---|---|
+| `retrieval` | lexical legs only | CI, on every push |
+| `retrieval-shipping` | EmbeddingGemma, ONNX, dense on | the lab |
+
+CI cannot run the dense leg — that needs model downloads that do not belong in
+a per-push job — so pointing it at the shipping numbers would produce a wall of
+regressions against a configuration it never had the models to reproduce, and
+teach everyone to ignore the report. CI runs with `--check-regressions`, so a
+real lexical regression fails the build.
 
 ---
 

@@ -223,7 +223,10 @@ class SyncService {
 
     // Prepend heading to chunk body for richer semantic context
     final texts = pending
-        .map((c) => c.headingPath.isNotEmpty ? '${c.headingPath}: ${c.body}' : c.body)
+        .map(
+          (c) =>
+              c.headingPath.isNotEmpty ? '${c.headingPath}: ${c.body}' : c.body,
+        )
         .toList();
 
     final embeddings = await _embedder.embedBatch(texts);

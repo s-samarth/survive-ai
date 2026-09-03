@@ -56,7 +56,9 @@ class ChatEmptyState extends StatelessWidget {
         const SizedBox(height: 16),
         Text(
           'Offline emergency guide for India',
-          style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600),
+          style: theme.textTheme.titleMedium?.copyWith(
+            fontWeight: FontWeight.w600,
+          ),
         ),
         const SizedBox(height: 8),
         Text(

@@ -63,16 +63,28 @@ class QueryRouter {
   static const double capabilityVeto = 0.45;
 
   static final _capabilityPatterns = [
-    RegExp(r'^(hi|hello|hey|yo|namaste|namaskar|salaam|hola)\b[\s!.?]*$', caseSensitive: false),
+    RegExp(
+      r'^(hi|hello|hey|yo|namaste|namaskar|salaam|hola)\b[\s!.?]*$',
+      caseSensitive: false,
+    ),
     RegExp(r'^help[\s!.?]*$', caseSensitive: false),
     RegExp(r'^(who|what) (are|r) (you|u)\b', caseSensitive: false),
     RegExp(r'^(tum|aap|tu) kaun (ho|hai|hain)\b', caseSensitive: false),
-    RegExp(r"^what('?s| is)? this( app| bot| thing)?[\s!.?]*$", caseSensitive: false),
+    RegExp(
+      r"^what('?s| is)? this( app| bot| thing)?[\s!.?]*$",
+      caseSensitive: false,
+    ),
     RegExp(r'\bwhat can (you|u|this app|this) do\b', caseSensitive: false),
     RegExp(r'\bhow can (you|u|this app|this) help\b', caseSensitive: false),
     RegExp(r'\bwhat do you do\b', caseSensitive: false),
-    RegExp(r'\bwhat (topics|things|questions).{0,20}(cover|ask|help|answer)\b', caseSensitive: false),
-    RegExp(r'\b(aap|tum|tu) kya kar sakte? (ho|hai|hain)\b', caseSensitive: false),
+    RegExp(
+      r'\bwhat (topics|things|questions).{0,20}(cover|ask|help|answer)\b',
+      caseSensitive: false,
+    ),
+    RegExp(
+      r'\b(aap|tum|tu) kya kar sakte? (ho|hai|hain)\b',
+      caseSensitive: false,
+    ),
     RegExp(r'^kya kar sakte? (ho|hai|hain)\b', caseSensitive: false),
     RegExp(r'\byeh kya hai\b', caseSensitive: false),
     RegExp(r'\bhow (do|does) (you|this) work\b', caseSensitive: false),
@@ -107,10 +119,18 @@ class QueryRouter {
     final known = confidence ?? 0.0;
 
     if (looksLikeCapabilityQuestion(query) && known < capabilityVeto) {
-      return QueryRoute(QueryIntent.capability, known, 'asks what the app does');
+      return QueryRoute(
+        QueryIntent.capability,
+        known,
+        'asks what the app does',
+      );
     }
     if (confidence == null) {
-      return QueryRoute(QueryIntent.answer, known, 'no confidence signal available');
+      return QueryRoute(
+        QueryIntent.answer,
+        known,
+        'no confidence signal available',
+      );
     }
     if (confidence >= answerThreshold) {
       return QueryRoute(QueryIntent.answer, confidence, 'retrieval confident');

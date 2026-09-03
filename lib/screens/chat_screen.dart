@@ -53,8 +53,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
     _controller.clear();
     setState(() {
-      _history.add(ChatMessage(
-          role: 'user', content: text, timestamp: DateTime.now()));
+      _history.add(
+        ChatMessage(role: 'user', content: text, timestamp: DateTime.now()),
+      );
       _isGenerating = true;
       _streamingBuffer = '';
       _sources = const [];
@@ -93,8 +94,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       }
     } catch (e) {
       // Never a bare stack trace: someone reading this may be in an emergency.
-      _finish('Something went wrong: $e\n\nIn a life-threatening emergency '
-          'call 112. You can also open the guides from the home screen.');
+      _finish(
+        'Something went wrong: $e\n\nIn a life-threatening emergency '
+        'call 112. You can also open the guides from the home screen.',
+      );
     }
     _scrollToBottom();
   }
@@ -105,8 +108,13 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _streamFlushTimer = null;
     if (!mounted) return;
     setState(() {
-      _history.add(ChatMessage(
-          role: 'assistant', content: answer, timestamp: DateTime.now()));
+      _history.add(
+        ChatMessage(
+          role: 'assistant',
+          content: answer,
+          timestamp: DateTime.now(),
+        ),
+      );
       _streamingBuffer = '';
       _isGenerating = false;
     });

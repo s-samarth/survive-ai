@@ -40,10 +40,19 @@ void main() {
 
   group('AnswerGuard.affirms', () {
     test('tells an assertion from a warning', () {
-      expect(AnswerGuard.affirms('Apply a tourniquet now.', 'apply a tourniquet'), isTrue);
-      expect(AnswerGuard.affirms('Never apply a tourniquet.', 'apply a tourniquet'), isFalse);
       expect(
-        AnswerGuard.affirms('Applying a tourniquet is harmful.', 'apply a tourniquet'),
+        AnswerGuard.affirms('Apply a tourniquet now.', 'apply a tourniquet'),
+        isTrue,
+      );
+      expect(
+        AnswerGuard.affirms('Never apply a tourniquet.', 'apply a tourniquet'),
+        isFalse,
+      );
+      expect(
+        AnswerGuard.affirms(
+          'Applying a tourniquet is harmful.',
+          'apply a tourniquet',
+        ),
         isFalse,
       );
     });
@@ -92,7 +101,11 @@ void main() {
     });
 
     test('caps appended warnings so they do not bury the answer', () {
-      final result = AnswerGuard.check('Get to a hospital.', chunks, maxOmissions: 1);
+      final result = AnswerGuard.check(
+        'Get to a hospital.',
+        chunks,
+        maxOmissions: 1,
+      );
       expect(result.omissions, hasLength(1));
     });
 

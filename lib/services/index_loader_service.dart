@@ -91,7 +91,8 @@ class IndexLoaderService {
     VectorIndex? vectors,
   ) {
     final children = <String, Map<String, dynamic>>{
-      for (final c in (decoded['children'] as List).cast<Map<String, dynamic>>())
+      for (final c
+          in (decoded['children'] as List).cast<Map<String, dynamic>>())
         c['chunk_id'] as String: c,
     };
 
@@ -99,7 +100,8 @@ class IndexLoaderService {
     final citationsByTopic = <String, List<Citation>>{};
     final counters = <String, int>{};
 
-    for (final row in (decoded['passages'] as List).cast<Map<String, dynamic>>()) {
+    for (final row
+        in (decoded['passages'] as List).cast<Map<String, dynamic>>()) {
       final topic = row['topic'] as String;
       final docId = _docIdFor(topic);
       final passageId = row['passage_id'] as String;
@@ -117,17 +119,19 @@ class IndexLoaderService {
       if (bodies.isEmpty) continue;
 
       final index = counters.update(topic, (v) => v + 1, ifAbsent: () => 0);
-      passagesByTopic.putIfAbsent(topic, () => []).add(
-        DocChunk(
-          id: passageId,
-          docId: docId,
-          topic: topic,
-          headingPath: row['heading_path'] as String? ?? '',
-          body: bodies.join('\n'),
-          chunkIndex: index,
-          embedding: vectors?.vectors[passageId],
-        ),
-      );
+      passagesByTopic
+          .putIfAbsent(topic, () => [])
+          .add(
+            DocChunk(
+              id: passageId,
+              docId: docId,
+              topic: topic,
+              headingPath: row['heading_path'] as String? ?? '',
+              body: bodies.join('\n'),
+              chunkIndex: index,
+              embedding: vectors?.vectors[passageId],
+            ),
+          );
     }
 
     return {

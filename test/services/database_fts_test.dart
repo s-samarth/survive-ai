@@ -20,14 +20,15 @@ void main() {
   late DatabaseService db;
   late Directory scratch;
 
-  DocChunk chunk(String id, String body, {String topic = 'medical'}) => DocChunk(
-    id: id,
-    docId: 'guide-$topic',
-    topic: topic,
-    headingPath: 'Bleeding',
-    body: body,
-    chunkIndex: 0,
-  );
+  DocChunk chunk(String id, String body, {String topic = 'medical'}) =>
+      DocChunk(
+        id: id,
+        docId: 'guide-$topic',
+        topic: topic,
+        headingPath: 'Bleeding',
+        body: body,
+        chunkIndex: 0,
+      );
 
   // A file per test rather than `inMemoryDatabasePath`: sqflite_ffi hands the
   // same in-memory database to every connection, so rows from one test showed
@@ -68,11 +69,18 @@ void main() {
       expect(await db.searchFts('water', topicFilter: 'flood'), ['c1']);
     });
 
-    test('a whole question retrieves, rather than demanding every word', () async {
-      // FTS5 ANDs bare terms, so an unprocessed sentence matches nothing.
-      await db.insertChunks([chunk('c1', 'apply firm pressure to the wound')]);
-      expect(await db.searchFts('how do I stop a wound from bleeding'), ['c1']);
-    });
+    test(
+      'a whole question retrieves, rather than demanding every word',
+      () async {
+        // FTS5 ANDs bare terms, so an unprocessed sentence matches nothing.
+        await db.insertChunks([
+          chunk('c1', 'apply firm pressure to the wound'),
+        ]);
+        expect(await db.searchFts('how do I stop a wound from bleeding'), [
+          'c1',
+        ]);
+      },
+    );
 
     test('editing a chunk re-indexes it under its new text', () async {
       await db.insertChunks([chunk('c1', 'apply a tourniquet')]);

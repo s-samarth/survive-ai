@@ -86,9 +86,14 @@ jobs:
       # Everything below runs the lexical path only. The dense leg, the
       # generation eval and the perf numbers all need model downloads, which do
       # not belong in a per-push job; they are run in the lab and recorded in
-      # python/README.md.
+      # docs/RESULTS.md.
+      #
+      # It therefore compares against the `retrieval` baseline, which is the
+      # lexical one. The shipping configuration has its own,
+      # `retrieval-shipping`, so this job cannot report a wall of imaginary
+      # regressions against numbers it never had the models to reproduce.
       - name: Retrieval eval
-        run: python -m evals eval --html reports/eval.html
+        run: python -m evals eval --html reports/eval.html --check-regressions
 
       - name: Multi-turn eval
         run: python -m evals multiturn --no-dense

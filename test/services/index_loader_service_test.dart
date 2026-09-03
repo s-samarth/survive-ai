@@ -86,9 +86,7 @@ void main() {
   });
 
   test('a missing artifact falls back to runtime chunking', () async {
-    const absent = IndexLoaderService(
-      readAsset: _throwMissing,
-    );
+    const absent = IndexLoaderService(readAsset: _throwMissing);
     expect(await absent.load(), isNull);
   });
 

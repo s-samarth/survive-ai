@@ -1,4 +1,3 @@
-
 import '../models/chat_message.dart';
 
 /// Rendering conversation history into the prompt, inside a token budget.

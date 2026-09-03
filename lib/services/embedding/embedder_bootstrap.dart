@@ -65,10 +65,8 @@ class EmbedderBootstrap {
   }
 
   /// Load the shipped passage vectors, or null when they are absent.
-  Future<VectorIndex?> loadVectors() => VectorIndex.load(
-    readBinary: _readBinary,
-    readString: _readString,
-  );
+  Future<VectorIndex?> loadVectors() =>
+      VectorIndex.load(readBinary: _readBinary, readString: _readString);
 
   /// Build the encoder, or return a disabled [EmbeddingService].
   ///

@@ -20,10 +20,12 @@ void main() {
   group('VectorIndex', () {
     test('pairs each vector with the passage id at its position', () async {
       final index = await VectorIndex.load(
-        readBinary: _binary(_vectorBytes([
-          [1, 0],
-          [0, 1],
-        ])),
+        readBinary: _binary(
+          _vectorBytes([
+            [1, 0],
+            [0, 1],
+          ]),
+        ),
         readString: _text({
           'model': 'embeddinggemma',
           'dim': 2,
@@ -45,9 +47,11 @@ void main() {
       // passage with a stranger's embedding; retrieval is simply worse, with
       // nothing to point at. Length is the cheapest thing that catches it.
       final index = await VectorIndex.load(
-        readBinary: _binary(_vectorBytes([
-          [1, 0],
-        ])),
+        readBinary: _binary(
+          _vectorBytes([
+            [1, 0],
+          ]),
+        ),
         readString: _text({
           'model': 'embeddinggemma',
           'dim': 2,

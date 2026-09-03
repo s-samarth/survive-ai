@@ -79,7 +79,8 @@ class _EncoderDownloadTileState extends ConsumerState<EncoderDownloadTile> {
 
     final megabytes =
         EncoderDownload.totalBytes(
-          ref.watch(encoderFilesProvider).valueOrNull ?? EncoderDownload.fallback,
+          ref.watch(encoderFilesProvider).valueOrNull ??
+              EncoderDownload.fallback,
         ) ~/
         (1024 * 1024);
 

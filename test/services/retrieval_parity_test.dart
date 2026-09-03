@@ -139,9 +139,11 @@ void main() {
           // any real defect. A missing task prefix moves a score by ~0.05; a
           // mispaired vector moves it by ~0.5.
           if (delta > 1e-5) {
-            denseDivergent.add('${entry['id']}  $query -> $id\n'
-                '    python: $expectedScore\n'
-                '    dart:   $actual');
+            denseDivergent.add(
+              '${entry['id']}  $query -> $id\n'
+              '    python: $expectedScore\n'
+              '    dart:   $actual',
+            );
           }
         }
 
@@ -151,9 +153,10 @@ void main() {
         //    weight, or a transliterated query reaching the dense leg.
         final expected = (entry['expected'] as List).cast<String>();
         if (expected.isEmpty) continue;
-        final actual = (await rag.retrieve(query, topK: expected.length))
-            .map((c) => c.id)
-            .toSet();
+        final actual = (await rag.retrieve(
+          query,
+          topK: expected.length,
+        )).map((c) => c.id).toSet();
         agreed += expected.where(actual.contains).length;
         compared += expected.length;
       }
@@ -166,8 +169,10 @@ void main() {
             'than 1e-5:\n${denseDivergent.take(5).join('\n')}',
       );
       // ignore: avoid_print
-      print('worst dense score delta vs the lab: '
-          '${worstDelta.toStringAsExponential(2)}');
+      print(
+        'worst dense score delta vs the lab: '
+        '${worstDelta.toStringAsExponential(2)}',
+      );
 
       final overlap = agreed / compared;
       expect(
@@ -179,8 +184,10 @@ void main() {
             'diverged beyond what different BM25 implementations explain',
       );
       // ignore: avoid_print
-      print('fused top-5 agreement with the lab: '
-          '${(overlap * 100).toStringAsFixed(1)}%');
+      print(
+        'fused top-5 agreement with the lab: '
+        '${(overlap * 100).toStringAsFixed(1)}%',
+      );
     },
     timeout: const Timeout(Duration(minutes: 5)),
   );

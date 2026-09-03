@@ -121,9 +121,7 @@ class DatabaseService {
       )
     ''');
 
-    await db.execute(
-      'CREATE INDEX idx_citations_chunk ON citations(chunk_id)',
-    );
+    await db.execute('CREATE INDEX idx_citations_chunk ON citations(chunk_id)');
 
     // FTS5 index over `chunks`, declared as an EXTERNAL CONTENT table.
     //

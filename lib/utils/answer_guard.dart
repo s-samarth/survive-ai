@@ -14,7 +14,11 @@ enum GuardAction {
 
 /// The outcome of checking one answer against the chunks it was built from.
 class GuardResult {
-  const GuardResult(this.action, {this.violations = const [], this.omissions = const []});
+  const GuardResult(
+    this.action, {
+    this.violations = const [],
+    this.omissions = const [],
+  });
 
   final GuardAction action;
 
@@ -47,27 +51,69 @@ class GuardResult {
 class AnswerGuard {
   /// Cues that negate what FOLLOWS them; position matters.
   static const _prefixCues = [
-    'do not', "don't", 'dont', 'never', 'no ', 'not ', 'must not',
-    'must never', 'should not', "shouldn't", 'cannot', "can't", 'avoid',
-    'refrain', 'stop', 'without', 'instead of', 'rather than',
+    'do not',
+    "don't",
+    'dont',
+    'never',
+    'no ',
+    'not ',
+    'must not',
+    'must never',
+    'should not',
+    "shouldn't",
+    'cannot',
+    "can't",
+    'avoid',
+    'refrain',
+    'stop',
+    'without',
+    'instead of',
+    'rather than',
   ];
 
   /// Predicates ABOUT a phrase, which may follow it: "applying ice is harmful".
   /// Deliberately narrow and mostly multi-word — a bare "harmful" would
   /// misread "apply pressure to stop the harmful bleeding".
   static const _clauseCues = [
-    'myth', 'mistake', 'is harmful', 'are harmful', 'is dangerous',
-    'are dangerous', 'does not work', "doesn't work", 'do not work',
-    'ineffective', 'is unsafe', 'causes harm', 'causes gangrene', 'is wrong',
-    'makes it worse', 'worsens',
+    'myth',
+    'mistake',
+    'is harmful',
+    'are harmful',
+    'is dangerous',
+    'are dangerous',
+    'does not work',
+    "doesn't work",
+    'do not work',
+    'ineffective',
+    'is unsafe',
+    'causes harm',
+    'causes gangrene',
+    'is wrong',
+    'makes it worse',
+    'worsens',
   ];
 
   static const _dangling = {
-    'the', 'a', 'an', 'to', 'of', 'it', 'you', 'your', 'are', 'is', 'and',
-    'or', 'for', 'in', 'on',
+    'the',
+    'a',
+    'an',
+    'to',
+    'of',
+    'it',
+    'you',
+    'your',
+    'are',
+    'is',
+    'and',
+    'or',
+    'for',
+    'in',
+    'on',
   };
 
-  static final _clauseSplit = RegExp(r'[.!?\n;:]|\s+--\s+|\s+—\s+|,\s+(?:but|and|or|because)\s+');
+  static final _clauseSplit = RegExp(
+    r'[.!?\n;:]|\s+--\s+|\s+—\s+|,\s+(?:but|and|or|because)\s+',
+  );
 
   /// Anchored to the START of a clause, so a claim about efficacy —
   /// "tourniquets do not stop venom spread" — is not read as an instruction.
@@ -120,7 +166,9 @@ class AnswerGuard {
   static List<String> forbiddenActions(String context) {
     final found = <String>[];
     for (final clause in clauses(context.replaceAll(_markup, ''))) {
-      final match = _prohibition.firstMatch(clause.replaceAll(RegExp(r'^[-•*\s]+'), ''));
+      final match = _prohibition.firstMatch(
+        clause.replaceAll(RegExp(r'^[-•*\s]+'), ''),
+      );
       if (match == null) continue;
 
       final words = match.group(1)!.trim().split(RegExp(r'\s+'));

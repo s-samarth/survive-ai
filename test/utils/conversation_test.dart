@@ -55,7 +55,10 @@ void main() {
       // early wrong answer compounds across the conversation.
       final query = Conversation.retrievalQuery(
         'what next',
-        [user('flooding in my colony'), bot('Move to the terrace immediately.')],
+        [
+          user('flooding in my colony'),
+          bot('Move to the terrace immediately.'),
+        ],
         vocabulary: {'flooding', 'colony', 'terrace'},
       );
 
@@ -82,10 +85,9 @@ void main() {
     test('Hinglish bridge words are carried without a corpus vocabulary', () {
       // The expansion table alone must be enough, since it is where romanised
       // Hindi lives.
-      final query = Conversation.retrievalQuery(
-        'ab kya karu',
-        [user('saanp ne kaata hai')],
-      );
+      final query = Conversation.retrievalQuery('ab kya karu', [
+        user('saanp ne kaata hai'),
+      ]);
 
       expect(query, contains('saanp'));
     });
