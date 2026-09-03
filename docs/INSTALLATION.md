@@ -155,57 +155,74 @@ Zero warnings required. If any warnings appear, fix them before committing.
 
 ---
 
-## 3. Building a Release APK
+## 3. Releasing
 
-### Debug APK (for development/testing)
+### For users: download from Releases
 
-```bash
-flutter build apk --debug
-# Output: build/app/outputs/flutter-apk/app-debug.apk
-```
-
-### Release APK (unsigned, for local distribution)
+Published builds live at
+**[github.com/s-samarth/survive-ai/releases](https://github.com/s-samarth/survive-ai/releases)**.
+Each release carries an APK and a `.sha256` file. Verify before installing:
 
 ```bash
-flutter build apk --release
-# Output: build/app/outputs/flutter-apk/app-release.apk
+sha256sum survive-ai-v1.0.0-arm64.apk
 ```
 
-This uses the debug signing key by default — sufficient for sideloading and testing.
+Compare the output to the `.sha256` file. If they differ, the file was
+corrupted or tampered with in transit — delete it.
 
-### Release APK (signed with production key)
+> The artifacts attached to individual CI runs are **not** releases. They expire
+> after seven days, need a GitHub login, and are signed with the Android debug
+> key. They exist to prove the app compiles.
 
-For official releases, signing is configured via `android/key.properties` (not in git):
+### For maintainers: cutting a release
 
 ```bash
-# 1. Create your keystore (one-time setup)
-keytool -genkey -v \
-  -keystore ~/survive-ai.jks \
-  -keyalg RSA -keysize 2048 \
-  -validity 10000 \
-  -alias survive-ai
-
-# 2. Create android/key.properties (never commit this file)
-cat > android/key.properties << EOF
-storePassword=<your-keystore-password>
-keyPassword=<your-key-password>
-keyAlias=survive-ai
-storeFile=/Users/<you>/survive-ai.jks
-EOF
-
-# 3. Build the signed release APK
-flutter build apk --release
+git tag v1.0.0
+git push origin v1.0.0
 ```
 
-### Computing the APK Checksum
+`.github/workflows/release.yml` then builds, tests, signs, checksums and
+publishes. It **refuses to publish** if the signing secrets are absent, or if
+the finished APK turns out to be debug-signed.
 
-Always publish the SHA-256 alongside the APK so users can verify authenticity:
+### One-time signing setup
+
+A debug-signed APK is signed with the publicly shared Android debug key, so
+anyone can build an "update" the OS accepts as the same app. For a sideloaded
+safety app that is the whole threat model, which is why the release workflow
+will not proceed without a real key.
+
+Create the keystore once, and **keep it somewhere you will not lose it** — an
+app signed with a different key cannot update one signed with this one, and
+every user would have to uninstall and reinstall.
 
 ```bash
-shasum -a 256 build/app/outputs/flutter-apk/app-release.apk
+keytool -genkey -v -keystore release-keystore.jks \
+  -keyalg RSA -keysize 2048 -validity 10000 -alias survive-ai
 ```
 
-Paste the output into the GitHub Release notes.
+Then set four repository secrets under **Settings → Secrets and variables →
+Actions**:
+
+| secret | value |
+|---|---|
+| `ANDROID_KEYSTORE_BASE64` | `base64 -i release-keystore.jks` |
+| `ANDROID_STORE_PASSWORD` | the store password you chose |
+| `ANDROID_KEY_PASSWORD` | the key password you chose |
+| `ANDROID_KEY_ALIAS` | `survive-ai` |
+
+The keystore itself is never committed. `.gitignore` covers `*.jks` and
+`key.properties` under every path Gradle might read it from.
+
+### Building locally
+
+```bash
+flutter build apk --release --target-platform android-arm64
+# build/app/outputs/flutter-apk/app-release.apk
+```
+
+Without `android/app/key.properties` this produces a **debug-signed** APK,
+which is fine for your own device and must not be distributed.
 
 ---
 

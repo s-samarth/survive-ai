@@ -316,9 +316,17 @@ in SQLite, embedding anything the shipped vector file does not cover
 
 ## Distribution
 
-Survive AI is distributed as a direct APK — no Play Store required. This is intentional: it allows the app to spread via USB sticks, local mesh networks, and peer-to-peer sharing in environments where app stores are inaccessible.
+Survive AI is distributed as a direct APK — no Play Store required. This is
+intentional: it lets the app spread via USB sticks, local mesh networks and
+peer-to-peer sharing where app stores are inaccessible.
 
-See [docs/INSTALLATION.md](docs/INSTALLATION.md) for sideloading instructions.
+**Download from [Releases](https://github.com/s-samarth/survive-ai/releases).**
+Every release carries a `.sha256` beside the APK; verify it before installing,
+because an app that spreads hand to hand is an app whose provenance nobody
+checks by default.
+
+Artifacts attached to individual CI runs are *not* releases — they expire, need
+a login, and are debug-signed. See [docs/INSTALLATION.md](docs/INSTALLATION.md).
 
 ---
 
@@ -339,7 +347,8 @@ See [docs/INSTALLATION.md](docs/INSTALLATION.md) for sideloading instructions.
 | [RESULTS.md](docs/RESULTS.md) | Every measured number, and what each run configured |
 | [EVALUATION.md](docs/EVALUATION.md) | The harness: four measurements, metrics, release gates |
 | [GOLDEN_SETS.md](docs/GOLDEN_SETS.md) | How the three label sets were built and why they are shaped that way |
-| [TESTING.md](docs/TESTING.md) | Device parity strategy, and what is still unverified |
+| [TESTING.md](docs/TESTING.md) | Device parity strategy, cloud device farms, what is still unverified |
+| [SECURITY.md](docs/SECURITY.md) | Threat model, what was audited, what is still open |
 
 **Working on it**
 

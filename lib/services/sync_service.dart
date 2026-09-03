@@ -158,7 +158,19 @@ class SyncService {
         final content = await _downloadDoc(entry.url);
 
         // Write to disk
-        final dir = Directory(p.join(docsDir.path, entry.topic));
+        // Both components come from the remote manifest. `basename` already
+        // guarded the filename; the topic directory was joined raw, so a
+        // manifest naming `../../databases` could have written a guide over
+        // the corpus. Unknown topics are dropped rather than sanitised into
+        // something that would silently never be retrieved.
+        final topic = DocTopic.values
+            .where((t) => t.key == entry.topic)
+            .firstOrNull;
+        if (topic == null) {
+          debugPrint('Skipping doc ${entry.id}: unknown topic ${entry.topic}');
+          continue;
+        }
+        final dir = Directory(p.join(docsDir.path, topic.key));
         await dir.create(recursive: true);
         final file = File(p.join(dir.path, p.basename(entry.filename)));
         await file.writeAsString(content);
@@ -260,7 +272,11 @@ class SyncService {
   }
 
   Future<DocManifest> _fetchManifest() async {
-    final response = await http.get(Uri.parse(kManifestUrl));
+    final manifestUri = Uri.tryParse(kManifestUrl);
+    if (manifestUri == null || manifestUri.scheme != 'https') {
+      throw ArgumentError.value(kManifestUrl, 'kManifestUrl', 'must be https');
+    }
+    final response = await http.get(manifestUri);
     if (response.statusCode != 200) {
       throw Exception('Failed to fetch manifest: ${response.statusCode}');
     }
@@ -270,7 +286,13 @@ class SyncService {
   }
 
   Future<String> _downloadDoc(String url) async {
-    final response = await http.get(Uri.parse(url));
+    // Guides are executed as retrieval content and shown to someone acting on
+    // them in an emergency; they do not travel in the clear.
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https') {
+      throw ArgumentError.value(url, 'url', 'doc URLs must be https');
+    }
+    final response = await http.get(uri);
     if (response.statusCode != 200) {
       throw Exception('Failed to download doc: $url');
     }

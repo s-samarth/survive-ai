@@ -135,21 +135,76 @@ FTS, prompt budgeting, the safety guard — is covered without a device.
 
 ## Getting to a device
 
-| approach | cost | answers |
-|---|---|---|
-| **Android command-line tools** (no Android Studio) | ~2–3 GB | 1 and 3 |
-| **Cloud device farm** (Firebase Test Lab, BrowserStack) | none local | 1, 2 and 3 |
-| macOS desktop target | full Xcode + CocoaPods | 1 only; Gemma will not run there |
+| approach | cost | answers | notes |
+|---|---|---|---|
+| **Cloud device farm** | none local | 1, 2 and 3 | real hardware; the only honest answer to the memory question |
+| **Android command-line tools** | ~2–3 GB | 1 and 3 | no Android Studio; fast local loop |
+| macOS desktop target | full Xcode + CocoaPods | 1 only | Gemma will not run there |
 
-Recommended: command-line tools locally for the fast loop, one device-farm run
-before release for the memory question. An emulator approximates memory
-behaviour; it does not settle it.
+An emulator approximates memory behaviour; it does not settle it. The app is
+arm64-only, so an x86 emulator cannot run it at all — on Apple Silicon use an
+`arm64-v8a` system image.
+
+### Cloud device farms
+
+**Firebase Test Lab** is the closest fit. It runs real, physical Android
+devices, is scriptable from CI, and its free tier covers a handful of daily
+runs on physical devices — enough for a pre-release check.
+
+A `robo` run needs no test code at all: it installs the APK, crawls the UI on
+its own, and returns logcat, a video, and crucially the **performance metrics**
+(memory, CPU) that answer whether the encoder fits beside Gemma.
+
+```bash
+gcloud firebase test android run \
+  --type robo \
+  --app survive-ai-v1.0.0-arm64.apk \
+  --device model=redfin,version=30 \
+  --device model=a51,version=31 \
+  --timeout 10m \
+  --record-video --performance-metrics
+```
+
+Pick devices by RAM, not by name — that is the whole question. `gcloud firebase
+test android models list` prints the catalogue; choose one 6 GB model and one
+8 GB model to match the stated floor and recommendation.
+
+The limitation to know in advance: **a robo crawl cannot answer a survival
+question.** The app needs a ~500 MB model download before it will generate
+anything, and Test Lab devices are wiped between runs. So a robo run tells you
+the app installs, launches, navigates and does not OOM at idle. To exercise a
+real turn you need an instrumentation test that waits for the download, or a
+build with the model side-loaded onto the device first.
+
+**Alternatives**: BrowserStack App Live and AWS Device Farm both give an
+interactive session on a real device through the browser, which is better for
+poking at the app by hand and worse for automation. For a one-off "does this
+actually work on a 6 GB phone", an interactive session is the faster route.
+
+### Wiring Test Lab into CI
+
+`.github/workflows/device-test.yml` runs on a release tag and on manual
+dispatch. It is **skipped unless `GCP_SA_KEY` is set**, so it costs nothing
+until you connect a project:
+
+1. Create a Firebase project and enable the Testing API.
+2. Create a service account with the *Firebase Test Lab Admin* role.
+3. Store its JSON key as the `GCP_SA_KEY` repository secret, and the project id
+   as `GCP_PROJECT_ID`.
+
+### Local emulator, without Android Studio
 
 ```bash
 brew install --cask temurin android-commandlinetools
 sdkmanager "platform-tools" "platforms;android-35" "emulator" \
            "system-images;android-35;google_apis;arm64-v8a"
+avdmanager create avd -n survive6gb \
+           -k "system-images;android-35;google_apis;arm64-v8a"
+emulator -avd survive6gb -memory 6144
 ```
+
+`-memory 6144` is the point: the default is far smaller, and testing against it
+would tell you nothing about the device this targets.
 
 ---
 

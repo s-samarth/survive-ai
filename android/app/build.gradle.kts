@@ -9,6 +9,8 @@ plugins {
 
 // Load signing config from key.properties if it exists
 val keystoreProperties = Properties()
+// rootProject here is `android/`, so this resolves to android/app/key.properties.
+// It is gitignored under both spellings; see .gitignore.
 val keystorePropertiesFile = rootProject.file("app/key.properties")
 if (keystorePropertiesFile.exists()) {
     keystorePropertiesFile.inputStream().use { keystoreProperties.load(it) }
@@ -41,6 +43,18 @@ android {
         }
     }
 
+    packaging {
+        jniLibs {
+            // `abiFilters` above trims Flutter's own engine, but not the native
+            // libraries that arrive inside third-party AARs. MediaPipe and ONNX
+            // Runtime each ship every ABI, so a build that already declared
+            // itself arm64-only was carrying x86_64 and armeabi-v7a copies of
+            // both — measured at roughly 90 MB of an APK that has no way to run
+            // on those architectures.
+            excludes += listOf("lib/x86/**", "lib/x86_64/**", "lib/armeabi-v7a/**")
+        }
+    }
+
     signingConfigs {
         if (keystorePropertiesFile.exists()) {
             create("release") {
@@ -54,10 +68,15 @@ android {
 
     buildTypes {
         release {
+            // Debug signing is a local-development convenience and must never
+            // leave this machine. A debug key is the publicly shared Android
+            // one, so anything signed with it can be replaced by an "update"
+            // from anyone — which for a sideloaded safety app is the whole
+            // threat. The release workflow refuses to publish unless a real
+            // keystore is present, so this fallback cannot reach a user.
             signingConfig = if (keystorePropertiesFile.exists()) {
                 signingConfigs.getByName("release")
             } else {
-                // Fallback to debug signing for local development
                 signingConfigs.getByName("debug")
             }
             proguardFiles(

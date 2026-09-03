@@ -3,19 +3,25 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Network state: detect WiFi before attempting downloads -->
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
-    <!-- Needed on Android < 10 to write model/docs to external storage -->
-    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE"
-        android:maxSdkVersion="28" />
+    <!-- No external-storage permission: the model, the guides and the database
+         all live in the app's private documents directory via path_provider.
+         Requesting WRITE_EXTERNAL_STORAGE asked for a broad, user-visible
+         permission the app never used, on a device someone may be handing to a
+         stranger during an emergency. -->
     <!-- largeHeap: the model weights and KV cache are native allocations, but
          the Dart heap still grows during corpus ingestion and token streaming.
-         This raises the Dalvik cap so the app is not killed on 4-6 GB devices
+         This raises the Dalvik cap so the app is not killed on 6 GB devices
          that apply a conservative default. -->
     <application
         android:label="Survive AI"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher"
         android:largeHeap="true"
-        android:hardwareAccelerated="true">
+        android:hardwareAccelerated="true"
+        android:usesCleartextTraffic="false"
+        android:allowBackup="false"
+        android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules">
         <activity
             android:name=".MainActivity"
             android:exported="true"

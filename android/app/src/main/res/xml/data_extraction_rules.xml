@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Nothing leaves the device.
+
+  Chat history is a record of what someone was afraid of and when — a snakebite
+  at 2am, a question about a lathi charge, a query about hiding during a riot.
+  On a shared or confiscated phone that is sensitive in a way ordinary app data
+  is not, so it is excluded from cloud backup and from device-to-device
+  transfer rather than relying on the platform default, which is to include it.
+
+  The model and the guides are excluded too, for a duller reason: they are
+  hundreds of megabytes of content that is identical on every device and
+  re-downloadable from the manifest.
+-->
+<data-extraction-rules>
+    <cloud-backup>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </cloud-backup>
+    <device-transfer>
+        <exclude domain="root" />
+        <exclude domain="database" />
+        <exclude domain="sharedpref" />
+        <exclude domain="file" />
+        <exclude domain="external" />
+    </device-transfer>
+</data-extraction-rules>

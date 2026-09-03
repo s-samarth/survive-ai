@@ -1,61 +1,141 @@
 name: Release
 
+# Tag-triggered, not push-triggered. A per-push build is a test that the app
+# compiles; a release is a file people install on a phone they may be relying
+# on during an emergency, and those deserve different triggers.
+#
+#   git tag v1.0.0 && git push origin v1.0.0
+#
+# Produces a GitHub Release with the signed APK and its SHA-256 attached, both
+# permanently and publicly downloadable. The per-push CI artifact is neither:
+# it expires after seven days and requires a GitHub login, so it was never a
+# distribution channel despite looking like one.
 on:
   push:
-    tags:
-      - 'v*'
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Tag to build (must already exist)'
+        required: true
 
 permissions:
   contents: write
 
 jobs:
-  build-and-release:
-    name: Build Signed APK & Create Release
+  release:
+    name: Build, sign and publish
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # Pinned for the same reason CI is: an unpinned channel changes the
+      # toolchain under a release without a commit.
       - uses: subosito/flutter-action@v2
         with:
+          flutter-version: '3.41.4'
           channel: 'stable'
           cache: true
 
-      - name: Install dependencies
-        run: flutter pub get
-
-      - name: Run tests
-        run: flutter test
-
-      - name: Decode keystore
+      # Refuse before building rather than after. Without a real keystore the
+      # Gradle config falls back to debug signing, and a debug-signed APK is
+      # signed with the publicly shared Android debug key: anyone can build an
+      # "update" that the OS accepts as the same app. Publishing one of those
+      # for a sideloaded safety app is worse than publishing nothing.
+      - name: Require a release keystore
         env:
-          KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$KEYSTORE_BASE64" | base64 --decode > android/app/release-keystore.jks
+          if [ -z "$KEYSTORE" ]; then
+            echo "::error::ANDROID_KEYSTORE_BASE64 is not set."
+            echo "A release must be signed with the project's own key, not the"
+            echo "Android debug key. See docs/INSTALLATION.md for how to create"
+            echo "the keystore and which four secrets to set."
+            exit 1
+          fi
 
-      - name: Create key.properties
+      - name: Restore the signing key
         env:
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
-          STORE_PASSWORD: ${{ secrets.STORE_PASSWORD }}
+          KEYSTORE: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          STORE_PASSWORD: ${{ secrets.ANDROID_STORE_PASSWORD }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
         run: |
-          cat > android/key.properties <<EOF
+          echo "$KEYSTORE" | base64 -d > android/app/release-keystore.jks
+          cat > android/app/key.properties <<EOF
           storePassword=$STORE_PASSWORD
           keyPassword=$KEY_PASSWORD
           keyAlias=$KEY_ALIAS
           storeFile=release-keystore.jks
           EOF
 
-      - name: Build signed release APK
+      - name: Install dependencies
+        run: flutter pub get
+
+      # The index and its vectors are committed, so a tag builds exactly the
+      # artifacts the parity tests ran against. Verified here rather than
+      # assumed: a release whose corpus does not match its vectors would
+      # retrieve nonsense, with no error.
+      - name: Verify the shipped artifacts are present
+        run: |
+          for f in corpus.json passages.f32 passages.f32.json tokenizer.bin; do
+            test -s "assets/index/$f" || { echo "::error::missing assets/index/$f"; exit 1; }
+          done
+
+      - name: Test
+        run: flutter test
+
+      - name: Build release APK
         run: flutter build apk --release --target-platform android-arm64
 
-      - name: Compute SHA-256 checksum
+      - name: Checksum and rename
+        id: artifact
         run: |
-          sha256sum build/app/outputs/flutter-apk/app-release.apk > build/app/outputs/flutter-apk/app-release.apk.sha256
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          NAME="survive-ai-${TAG}-arm64.apk"
+          mv build/app/outputs/flutter-apk/app-release.apk "$NAME"
+          sha256sum "$NAME" > "$NAME.sha256"
+          echo "name=$NAME" >> "$GITHUB_OUTPUT"
+          echo "sha=$(cut -d' ' -f1 < "$NAME.sha256")" >> "$GITHUB_OUTPUT"
+          echo "size=$(du -h "$NAME" | cut -f1)" >> "$GITHUB_OUTPUT"
 
-      - name: Create GitHub Release
+      # Fails the release if the APK is signed with the Android debug key, which
+      # is what the Gradle fallback produces. Checking the output beats trusting
+      # that the secret was wired up correctly.
+      - name: Reject a debug-signed APK
+        run: |
+          OWNER=$(keytool -printcert -jarfile "${{ steps.artifact.outputs.name }}" \
+                  | grep -m1 'Owner:' || true)
+          echo "Signed by: $OWNER"
+          if echo "$OWNER" | grep -q 'CN=Android Debug'; then
+            echo "::error::APK is debug-signed; refusing to publish."
+            exit 1
+          fi
+
+      - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
-          generate_release_notes: true
+          tag_name: ${{ github.event.inputs.tag || github.ref_name }}
+          name: Survive AI ${{ github.event.inputs.tag || github.ref_name }}
           files: |
-            build/app/outputs/flutter-apk/app-release.apk
-            build/app/outputs/flutter-apk/app-release.apk.sha256
+            ${{ steps.artifact.outputs.name }}
+            ${{ steps.artifact.outputs.name }}.sha256
+          body: |
+            **${{ steps.artifact.outputs.name }}** — ${{ steps.artifact.outputs.size }}, arm64-v8a only.
+
+            Verify the download before installing:
+
+            ```
+            sha256sum ${{ steps.artifact.outputs.name }}
+            ${{ steps.artifact.outputs.sha }}
+            ```
+
+            Requires Android 7.0+ and a 64-bit ARM device. 6 GB RAM minimum,
+            8 GB recommended. The app downloads its ~500 MB language model over
+            WiFi on first launch; the optional 175 MB search model can be added
+            later from Settings.
+
+            Not medical advice, and not a substitute for emergency services
+            (112 in India).

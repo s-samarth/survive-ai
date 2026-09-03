@@ -36,8 +36,11 @@ jobs:
       - name: Run tests
         run: flutter test --reporter=github
 
+  # A compile check, not a distribution channel. The artifact expires after
+  # seven days, needs a GitHub login to fetch, and is signed with the Android
+  # debug key. Releases people install come from release.yml, on a tag.
   build-apk:
-    name: Build Release APK
+    name: Build APK (compile check)
     runs-on: ubuntu-latest
     needs: analyze-and-test
     steps:
@@ -63,7 +66,7 @@ jobs:
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: survive-ai-release-apk
+          name: survive-ai-unsigned-ci-build
           path: build/app/outputs/flutter-apk/app-release.apk
           retention-days: 7
 

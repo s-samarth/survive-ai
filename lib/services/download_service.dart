@@ -25,6 +25,48 @@ class ChecksumMismatchException implements Exception {
 class DownloadService {
   const DownloadService();
 
+  /// A path component that came from the network, checked before it is joined
+  /// onto a local directory.
+  ///
+  /// Filenames and subfolders here originate in `manifest.json`, which is
+  /// fetched from a remote host. `path.join` does not interpret `..` — it
+  /// happily produces a path that escapes the app's documents directory — so a
+  /// manifest that named `../../../databases/survive_ai.db` could overwrite the
+  /// corpus, and one naming a shared-library path could do considerably worse.
+  ///
+  /// The rule is deliberately strict rather than clever: a single plain
+  /// segment, no separators, no `..`, no leading dot. Every legitimate name in
+  /// the manifest already satisfies it, so there is nothing to trade away.
+  static String _safeSegment(String value, String field) {
+    final trimmed = value.trim();
+    final looksSafe =
+        trimmed.isNotEmpty &&
+        !trimmed.startsWith('.') &&
+        !trimmed.contains('/') &&
+        !trimmed.contains(r'\') &&
+        !trimmed.contains('\u0000') &&
+        p.basename(trimmed) == trimmed;
+    if (!looksSafe) {
+      throw ArgumentError.value(value, field, 'unsafe path component');
+    }
+    return trimmed;
+  }
+
+  /// Reject anything that is not HTTPS.
+  ///
+  /// `minSdk` is 24, and Android only blocks cleartext by default from API 28,
+  /// so on the oldest supported devices a manifest naming an `http://` URL
+  /// would be fetched in the clear — and the response is a file this app then
+  /// executes as model weights. The SHA-256 check catches corruption, but the
+  /// manifest that carries the hash arrives over the same channel.
+  static Uri _httpsOnly(String url, String field) {
+    final uri = Uri.tryParse(url);
+    if (uri == null || uri.scheme != 'https' || uri.host.isEmpty) {
+      throw ArgumentError.value(url, field, 'must be an https URL');
+    }
+    return uri;
+  }
+
   /// Download [url] into `<app documents>/<subfolder>/<filename>`.
   ///
   /// Resumes from a previous partial download when the sidecar metadata proves
@@ -42,16 +84,20 @@ class DownloadService {
     int? expectedBytes,
     void Function(int downloaded, int total)? onProgress,
   }) async {
+    final source = _httpsOnly(url, 'url');
+    final safeFolder = _safeSegment(subfolder, 'subfolder');
+    final safeName = _safeSegment(filename, 'filename');
+
     final appDir = await getApplicationDocumentsDirectory();
-    final dir = Directory(p.join(appDir.path, subfolder));
+    final dir = Directory(p.join(appDir.path, safeFolder));
     await dir.create(recursive: true);
 
-    final filePath = p.join(dir.path, filename);
+    final filePath = p.join(dir.path, safeName);
     final tempFile = File('$filePath.part');
     final metaFile = File('$filePath.part.json');
 
     final resumeKey = jsonEncode({
-      'url': url,
+      'url': source.toString(),
       'bytes': expectedBytes,
       'sha256': expectedSha256,
     });
@@ -71,7 +117,7 @@ class DownloadService {
     }
     await metaFile.writeAsString(resumeKey);
 
-    final request = http.Request('GET', Uri.parse(url));
+    final request = http.Request('GET', source);
     if (existingBytes > 0) request.headers['Range'] = 'bytes=$existingBytes-';
 
     final client = http.Client();

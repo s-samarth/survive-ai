@@ -1,0 +1,84 @@
+name: Device Test
+
+# Runs the APK on real, physical Android hardware in Firebase Test Lab.
+#
+# This exists because three things about this app cannot be answered by any
+# test that does not run on a phone: whether ONNX Runtime loads a 175 MB
+# external-data graph under Flutter, whether the encoder fits beside a 2B model
+# on a 6 GB device, and what the first token actually costs. Everything else is
+# covered without a device — see docs/TESTING.md.
+#
+# Skipped silently unless GCP_SA_KEY is configured, so it costs nothing until
+# a Firebase project is connected.
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      devices:
+        description: 'gcloud --device flags, semicolon separated'
+        default: 'model=redfin,version=30;model=a51,version=31'
+
+jobs:
+  test-lab:
+    name: Firebase Test Lab
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check for credentials
+        id: creds
+        env:
+          KEY: ${{ secrets.GCP_SA_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then
+            echo "GCP_SA_KEY is not set — skipping. See docs/TESTING.md."
+            echo "configured=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - uses: subosito/flutter-action@v2
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          flutter-version: '3.41.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Build APK
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          flutter pub get
+          flutter build apk --release --target-platform android-arm64
+
+      - uses: google-github-actions/auth@v2
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          credentials_json: ${{ secrets.GCP_SA_KEY }}
+
+      - uses: google-github-actions/setup-gcloud@v2
+        if: steps.creds.outputs.configured == 'true'
+        with:
+          project_id: ${{ secrets.GCP_PROJECT_ID }}
+
+      # A robo crawl installs the APK, explores the UI on its own and reports
+      # logcat, video and per-device memory and CPU. It cannot ask the app a
+      # survival question — that needs the ~500 MB model, which a wiped test
+      # device does not have — so what this proves is that the app installs,
+      # launches, navigates and stays inside its memory budget at rest. The
+      # generation path is measured in the lab instead; see docs/RESULTS.md.
+      - name: Run on physical devices
+        if: steps.creds.outputs.configured == 'true'
+        run: |
+          DEVICES="${{ github.event.inputs.devices || 'model=redfin,version=30;model=a51,version=31' }}"
+          ARGS=""
+          IFS=';' read -ra LIST <<< "$DEVICES"
+          for d in "${LIST[@]}"; do ARGS="$ARGS --device $d"; done
+          gcloud firebase test android run \
+            --type robo \
+            --app build/app/outputs/flutter-apk/app-release.apk \
+            $ARGS \
+            --timeout 10m \
+            --record-video \
+            --performance-metrics \
+            --results-history-name "survive-ai"

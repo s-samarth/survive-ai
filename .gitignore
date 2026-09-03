@@ -45,7 +45,14 @@ app.*.map.json
 /android/app/release
 
 # Release signing credentials — NEVER commit
+# Secrets: never commit these.
+.env
+.env.*
+# Gradle reads android/app/key.properties; the older spelling is kept so a file
+# put in either place is ignored rather than only the one nobody uses.
 android/key.properties
+android/app/key.properties
+key.properties
 *.keystore
 *.jks
 
