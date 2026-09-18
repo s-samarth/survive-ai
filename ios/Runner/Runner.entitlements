@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- This app is a 2B-parameter language model that has to stay resident.
+	     iOS gives a normal app a jetsam limit well under what Gemma 2B int4
+	     plus its KV cache needs, and the kernel kills the process without a
+	     crash report the user can act on — the same class of failure that
+	     android:largeHeap="true" exists to avoid on the Android side.
+
+	     increased-memory-limit raises that ceiling on devices that have the
+	     RAM; extended-virtual-addressing lets the 64-bit address space grow
+	     past the default, which is what MediaPipe's mmap of the weights file
+	     actually needs. Both are free entitlements — no Apple approval — but
+	     they only take effect on a signed build, so a simulator run tells you
+	     nothing about whether they are working. -->
+	<key>com.apple.developer.kernel.increased-memory-limit</key>
+	<true/>
+	<key>com.apple.developer.kernel.extended-virtual-addressing</key>
+	<true/>
+</dict>
+</plist>

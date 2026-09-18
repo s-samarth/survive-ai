@@ -1,0 +1,63 @@
+# The iOS deployment target. Checked in, not left to Xcode's default, because
+# three things have to agree on it: this line, IPHONEOS_DEPLOYMENT_TARGET in
+# Runner.xcodeproj, and the `kMinimumIosVersion` constant the parity test reads.
+#
+# 16.0 is not a preference. flutter_gemma's podspec declares `s.platform =
+# :ios, '16.0'` (MediaPipeTasksGenAI) and flutter_onnxruntime's declares the
+# same. Lowering it does not get you a wider install base, it gets you a
+# CocoaPods resolution error.
+platform :ios, '16.0'
+
+# CocoaPods analytics sends network stats synchronously, affecting flutter build latency.
+ENV['COCOAPODS_DISABLE_STATS'] = 'true'
+
+project 'Runner', {
+  'Debug' => :debug,
+  'Profile' => :release,
+  'Release' => :release,
+}
+
+def flutter_root
+  generated_xcode_build_settings_path = File.expand_path(File.join('..', 'Flutter', 'Generated.xcconfig'), __FILE__)
+  unless File.exist?(generated_xcode_build_settings_path)
+    raise "#{generated_xcode_build_settings_path} must exist. If you're running pod install manually, make sure flutter pub get is executed first"
+  end
+
+  File.foreach(generated_xcode_build_settings_path) do |line|
+    matches = line.match(/FLUTTER_ROOT\=(.*)/)
+    return matches[1].strip if matches
+  end
+  raise "FLUTTER_ROOT not found in #{generated_xcode_build_settings_path}. Try deleting Generated.xcconfig, then run flutter pub get"
+end
+
+require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelper'), flutter_root)
+
+flutter_ios_podfile_setup
+
+target 'Runner' do
+  use_frameworks!
+
+  flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
+  target 'RunnerTests' do
+    inherit! :search_paths
+  end
+end
+
+post_install do |installer|
+  installer.pods_project.targets.each do |target|
+    flutter_additional_ios_build_settings(target)
+    target.build_configurations.each do |config|
+      # Pods default to whatever their own podspec declares, which for several
+      # transitive dependencies is still iOS 12. Xcode 15+ turns that into a
+      # build-stopping warning wall, and one pod left below the app's own
+      # target is enough to break the archive. Pin every pod to the same floor
+      # the app uses.
+      config.build_settings['IPHONEOS_DEPLOYMENT_TARGET'] = '16.0'
+      # No simulator slice ships for TensorFlowLiteSelectTfOps (a flutter_gemma
+      # dependency), so an arm64 simulator build fails to link. Excluding the
+      # arch makes `flutter run` on a Mac fall back to the x86_64 slice under
+      # Rosetta; device builds are unaffected.
+      config.build_settings['EXCLUDED_ARCHS[sdk=iphonesimulator*]'] = 'arm64'
+    end
+  end
+end

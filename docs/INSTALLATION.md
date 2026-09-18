@@ -1,6 +1,8 @@
 # Installation, Running & Deployment — Survive AI
 
-This document covers everything needed to get Survive AI onto a device — whether you're a developer running it locally, an NGO deploying it to field workers, or an end user sideloading it onto an Android phone.
+This document covers everything needed to get Survive AI onto a device — whether you're a developer running it locally, an NGO deploying it to field workers, or an end user sideloading it onto an Android phone. The iOS-specific parts —
+running from source, getting the model onto the device, and why there is no
+sideload — are collected in [the iOS section](#ios) near the end.
 
 ---
 
@@ -381,9 +383,53 @@ The maintainer's signing key fingerprint is published in `SECURITY.md`.
 | Requirement | Minimum | Recommended |
 |---|---|---|
 | Android version | 7.0 (API 24) | 10.0+ (API 29+) |
+| iOS version | 16.0 | 17.0+ |
 | RAM | 6 GB | 8 GB+ |
 | Storage | 1GB free | 2GB+ free |
-| CPU | ARM64 (arm64-v8a) | ARM64 (arm64-v8a) |
+| CPU | ARM64 (arm64-v8a / Apple silicon) | same |
 | Internet | WiFi for first launch | Not required after setup |
 
-The app is compiled for `arm64-v8a` (64-bit ARM) only.
+The app is compiled for 64-bit ARM only on both platforms — `arm64-v8a` on
+Android, `arm64` on iOS. MediaPipe LLM Inference ships no other slice.
+
+The iOS floor of 16.0 comes from the plugins, not from a product decision:
+`flutter_gemma` and `flutter_onnxruntime` both declare `s.platform = :ios,
+'16.0'`. The 6 GB RAM floor is the binding constraint in practice, which on iOS
+means iPhone 15 Pro and later, or an iPad with 6 GB or more.
+
+---
+
+## iOS
+
+### Running from source (macOS only)
+
+```bash
+flutter pub get
+cd ios && pod install && cd ..
+flutter run -d <your iPhone>
+```
+
+CocoaPods pulls MediaPipeTasksGenAI and onnxruntime-objc, so the first
+`pod install` is a large download.
+
+The simulator is only partly useful. `ios/Podfile` excludes `arm64` for
+simulator builds because `TensorFlowLiteSelectTfOps` ships no simulator slice,
+so an Apple-silicon Mac runs the simulator under Rosetta — and the memory
+entitlements that let a 2B model stay resident do not apply there at all. Model
+loading and memory behaviour have to be tested on a real device.
+
+### Getting the model onto an iPhone
+
+There is no `adb push` equivalent. The app sets `UIFileSharingEnabled`, so its
+Documents folder appears in Finder (connect the device, select it, Files tab)
+and in the Files app under *On My iPhone → Survive AI*. Drop
+`gemma-2b-it-cpu-int4.bin` in there, or into a `models/` folder inside it, and
+the app finds it on next launch — the same search path the downloader uses.
+
+### Distribution
+
+iOS has no sideloading. Reaching a user's phone means TestFlight or the App
+Store, which means an Apple Developer account ($99/yr). `release.yml` builds and
+verifies the iOS app at every tag but publishes only the APK; the iOS artifact
+is an unsigned bundle for inspection. The four secrets a signing pipeline would
+need are named in that workflow.

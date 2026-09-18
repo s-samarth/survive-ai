@@ -15,6 +15,7 @@ import 'database_service.dart';
 import 'index_loader_service.dart';
 import 'chunker_service.dart';
 import 'embedding_service.dart';
+import 'platform_storage.dart';
 
 /// Where the content manifest lives.
 ///
@@ -302,7 +303,12 @@ class SyncService {
   Future<Directory> _docsDirectory() async {
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(appDir.path, 'docs'));
+    final isNew = !await dir.exists();
     await dir.create(recursive: true);
+    // Every file under here is either bundled in the APK/IPA or re-fetchable
+    // from the manifest, so there is nothing worth putting in a user's iCloud
+    // quota. No-op on Android, where backup is off for the whole app.
+    if (isNew) await PlatformStorage.excludeFromBackup(dir.path);
     return dir;
   }
 }

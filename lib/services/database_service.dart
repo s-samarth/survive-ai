@@ -3,6 +3,7 @@ import 'package:sqflite/sqflite.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import '../models/doc_chunk.dart';
+import 'platform_storage.dart';
 
 /// Owns the SQLite database: schema creation, migrations, and all CRUD.
 ///
@@ -33,6 +34,11 @@ class DatabaseService {
     final path =
         _overridePath ??
         p.join((await getApplicationDocumentsDirectory()).path, _dbName);
+    // The database is derived data: every row in it is rebuilt from the
+    // bundled corpus by SyncService.seedFromAssets() on launch. Backing it up
+    // to iCloud would upload a copy of something the app regenerates for free.
+    // No-op on Android and in tests.
+    await PlatformStorage.excludeFromBackup(path);
     return openDatabase(
       path,
       version: _dbVersion,

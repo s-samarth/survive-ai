@@ -6,6 +6,8 @@ import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 
+import 'platform_storage.dart';
+
 /// Thrown when a completed download does not match its expected SHA-256.
 class ChecksumMismatchException implements Exception {
   final String expected;
@@ -91,6 +93,11 @@ class DownloadService {
     final appDir = await getApplicationDocumentsDirectory();
     final dir = Directory(p.join(appDir.path, safeFolder));
     await dir.create(recursive: true);
+    // Before the first byte lands, not after: on iOS the exclusion flag is
+    // inherited by files created inside the directory later, so marking it
+    // here covers the .part file, the finished model and the encoder without
+    // a second call. No-op on Android.
+    await PlatformStorage.excludeFromBackup(dir.path);
 
     final filePath = p.join(dir.path, safeName);
     final tempFile = File('$filePath.part');
