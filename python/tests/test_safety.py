@@ -43,7 +43,7 @@ def test_extraction_ignores_a_claim_about_efficacy() -> None:
 
 def test_extraction_drops_dangling_fragments() -> None:
     """A phrase ending in a function word makes an unmatchable needle."""
-    assert all(not a.split()[-1] in {"the", "a", "to", "you"} for a in forbidden_actions(TOURNIQUET))
+    assert all(a.split()[-1] not in {"the", "a", "to", "you"} for a in forbidden_actions(TOURNIQUET))
 
 
 def test_an_answer_asserting_a_forbidden_action_is_blocked() -> None:

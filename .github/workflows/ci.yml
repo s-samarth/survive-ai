@@ -91,8 +91,16 @@ jobs:
           python-version: '3.12'
 
       # survive_rag itself has no third-party dependencies; these are dev only.
+      #
+      # ruff is pinned for the same reason the Flutter version is pinned above:
+      # unpinned, its default rule set changes under the repository without a
+      # commit, and the job then fails on a file nobody touched. That is not
+      # hypothetical — `pip install ruff` resolving to 0.15.8 started failing a
+      # line in test_safety.py that had been green since it was written.
+      # Bumping this is a deliberate act: run ruff locally and commit the fixes
+      # with it.
       - name: Install dev tools
-        run: pip install pytest ruff
+        run: pip install pytest ruff==0.15.8
 
       - name: Lint
         run: ruff check survive_rag evals tests --line-length 100
