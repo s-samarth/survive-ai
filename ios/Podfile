@@ -35,7 +35,21 @@ require File.expand_path(File.join('packages', 'flutter_tools', 'bin', 'podhelpe
 flutter_ios_podfile_setup
 
 target 'Runner' do
-  use_frameworks!
+  # `:linkage => :static`, not a bare `use_frameworks!`.
+  #
+  # Every binary this app's ML stack pulls in — MediaPipeTasksGenAI,
+  # MediaPipeTasksGenAIC, TensorFlowLiteC, TensorFlowLiteSelectTfOps — ships as
+  # a *statically* linked xcframework. CocoaPods refuses to place a static
+  # binary inside a dynamic framework target and fails the install outright:
+  #
+  #   [!] The 'Pods-Runner' target has transitive dependencies that include
+  #       statically linked binaries: ...MediaPipeTasksGenAI.xcframework...
+  #
+  # That is not a warning to work around; it is `pod install` exiting 1, so the
+  # iOS build never reaches the compiler. Static linkage for the whole pod graph
+  # is the supported combination, and it is also what an app that mmaps a 500 MB
+  # model wants: one binary, no dynamic-framework load at launch.
+  use_frameworks! :linkage => :static
 
   flutter_install_all_ios_pods File.dirname(File.realpath(__FILE__))
   target 'RunnerTests' do
