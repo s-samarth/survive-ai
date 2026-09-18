@@ -15,7 +15,12 @@ import UIKit
 
   func didInitializeImplicitFlutterEngine(_ engineBridge: FlutterImplicitEngineBridge) {
     GeneratedPluginRegistrant.register(with: engineBridge.pluginRegistry)
-    registerPlatformStorageChannel(with: engineBridge.binaryMessenger)
+    // `applicationRegistrar`, not `pluginRegistry`. FlutterImplicitEngineBridge
+    // vends two things: a FlutterPluginRegistry, which hands out a registrar
+    // per plugin, and a FlutterApplicationRegistrar for application-level
+    // services. This channel belongs to the app, not to a plugin, so it takes
+    // the second one. `messenger()` is declared on FlutterBaseRegistrar.
+    registerPlatformStorageChannel(with: engineBridge.applicationRegistrar.messenger())
   }
 
   /// One method: mark a path as excluded from iCloud and iTunes backup.
