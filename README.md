@@ -1,8 +1,8 @@
 # Survive AI
 
 > An offline-first survival assistant that runs a 2B language model and a
-> retrieval pipeline entirely on an Android phone. Scoped to India. No network
-> at runtime.
+> retrieval pipeline entirely on the phone — Android and iOS, one codebase.
+> Scoped to India. No network at runtime.
 
 ---
 
@@ -233,7 +233,8 @@ protections:
 | Index build | Python (`python/survive_rag`) | Chunking and embedding run offline so chunk ids — and citations — are stable everywhere |
 | State management | Riverpod 2.x | Constructor-injectable, testable |
 | Docs hosting | GitHub public repo | Free, community PR workflow |
-| Distribution | Direct APK sideload | Works via USB in regions with restricted internet |
+| Distribution | Direct APK sideload (Android) | Works via USB in regions with restricted internet |
+| Platform parity | Asserted in `flutter test` | `android/` and `ios/` read as data and checked against each other on every push — see [docs/PLATFORM_PARITY.md](docs/PLATFORM_PARITY.md) |
 
 ---
 
@@ -319,6 +320,13 @@ in SQLite, embedding anything the shipped vector file does not cover
 Survive AI is distributed as a direct APK — no Play Store required. This is
 intentional: it lets the app spread via USB sticks, local mesh networks and
 peer-to-peer sharing where app stores are inaccessible.
+
+iOS has no equivalent. There is no sideloading, so an iOS build reaches a phone
+through TestFlight or the App Store, which means an Apple Developer account.
+The iOS project is built and verified at every tag (`.github/workflows/`), but
+the release workflow publishes the APK only; the iOS artifact is an unsigned
+bundle for inspection. Wiring up signed distribution is a one-job change once
+the account exists — the secrets it needs are named in `release.yml`.
 
 **Download from [Releases](https://github.com/s-samarth/survive-ai/releases).**
 Every release carries a `.sha256` beside the APK; verify it before installing,

@@ -1,0 +1,78 @@
+name: iOS
+
+# The iOS half of the compile check, kept in its own workflow because it is the
+# only job in this repository that needs a macOS runner — and macOS minutes bill
+# at ten times the Linux rate. Everything that can be checked without Xcode is
+# checked on Linux in ci.yml, including the Android/iOS parity test, which is
+# what catches most drift.
+#
+# So this runs on every push to a shipping branch and on tags, but on pull
+# requests only when something that can actually break an iOS build has moved.
+on:
+  push:
+    branches: [main, develop]
+    tags: ['v*']
+  pull_request:
+    branches: [main, develop]
+    paths:
+      - 'ios/**'
+      - 'pubspec.yaml'
+      - 'pubspec.lock'
+      - '.github/workflows/ios.yml'
+  workflow_dispatch:
+
+jobs:
+  build-ios:
+    name: Build iOS (compile check)
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+
+      # Pinned to the same version ci.yml uses. Two runners on two Flutter
+      # versions is how the platforms drift without anyone editing a file.
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Cached separately from pub: MediaPipeTasksGenAI and onnxruntime-objc are
+      # large downloads and neither changes between runs unless the lockfile does.
+      - name: Cache CocoaPods
+        uses: actions/cache@v4
+        with:
+          path: ios/Pods
+          key: ${{ runner.os }}-pods-${{ hashFiles('ios/Podfile', 'pubspec.lock') }}
+          restore-keys: ${{ runner.os }}-pods-
+
+      # --no-codesign: this is a compile check, not a distribution channel. A
+      # build that people install has to be signed with an Apple Developer
+      # identity, which is release.yml's job and needs secrets this repository
+      # may not have. The same distinction the APK job makes.
+      - name: Build (unsigned)
+        run: flutter build ios --release --no-codesign
+
+      # The Android job checks that the retrieval index made it into the APK.
+      # The same question matters more on iOS, because the assets arrive through
+      # a different mechanism (a copied Flutter.framework rather than a zip
+      # entry) and an empty corpus is not an error at runtime — it is an app
+      # that answers every question with nothing.
+      - name: Verify the shipped index is inside the app bundle
+        run: |
+          APP=build/ios/iphoneos/Runner.app
+          MISSING=0
+          for f in corpus.json passages.f32 passages.f32.json tokenizer.bin; do
+            if [ -s "$APP/Frameworks/App.framework/flutter_assets/assets/index/$f" ]; then
+              echo "ok: $f"
+            else
+              echo "::error::missing assets/index/$f in the iOS bundle"
+              MISSING=1
+            fi
+          done
+          test "$MISSING" -eq 0
+
+      - name: Report the bundle size
+        run: du -sh build/ios/iphoneos/Runner.app

@@ -22,6 +22,12 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 # Build release APK (sideloaded, not Play Store)
 flutter build apk --release --target-platform android-arm64
+
+# Build iOS (macOS only; --no-codesign is the CI compile check)
+flutter build ios --release --no-codesign
+
+# Install iOS pods after changing a dependency (macOS only)
+cd ios && pod install && cd ..
 ```
 
 ## Architecture
@@ -37,6 +43,11 @@ DatabaseService (SQLite) + flutter_gemma (MediaPipe LLM) + HTTP
         ↓
 /files/models/gemma-2b-it-cpu-int4.bin  |  /files/docs/{topic}/*.md  |  survive_ai.db
 ```
+
+**Two platforms, one codebase.** `android/` and `ios/` are both checked in and
+both ship. Nothing in `lib/` is platform-conditional except
+`PlatformStorage`. See **Platform parity** below and
+[docs/PLATFORM_PARITY.md](docs/PLATFORM_PARITY.md).
 
 **Scope: India.** The corpus, the emergency numbers, the query-expansion
 vocabulary (including romanised Hindi), and the topic taxonomy are all
@@ -103,6 +114,36 @@ three named a `chunk_id` column the FTS table does not have, and keyword search
 could not return a row on a device while every test passed. Test through
 `DatabaseService`, not around it.
 
+**Platform parity is enforced by a test, not by discipline.**
+`test/platform_parity_test.dart` reads `android/` and `ios/` as data and asserts
+they still describe the same app: bundle identifier (the Android application id
+with `_` → `-`, because iOS forbids underscores), display name, version source,
+minimum OS, network posture, backup posture, arm64-only, memory headroom, and
+that no asset is bundled by one platform's build system instead of `pubspec`. It
+also scans every plugin podspec and fails if one now needs a higher iOS
+deployment target than `ios/Podfile` declares. It runs on Linux in the ordinary
+`flutter test` job. **When it fails, change the platform file, not the test** —
+a deliberate difference gets recorded in docs/PLATFORM_PARITY.md with its
+reason. The macOS build job (`.github/workflows/ios.yml`) is the other half: the
+parity test proves the iOS project is the same app, the build proves it
+compiles.
+
+**iOS backup exclusion is not optional.** Android switches backup off wholesale
+with `android:allowBackup="false"`. iOS has no such switch — everything under
+Documents goes to iCloud, which here is a ~500 MB model plus a rebuildable
+index. `PlatformStorage.excludeFromBackup()` (method channel to
+`ios/Runner/AppDelegate.swift`) is called by `DownloadService`, `SyncService`
+and `DatabaseService` right after each creates its directory, and is a no-op on
+Android. Do not move these files to `Library/Caches` to avoid the call: iOS
+purges Caches under disk pressure, and an offline safety app that loses its
+model has failed at its only job.
+
+**iOS minimum is 16.0 because the plugins say so**, not as a preference.
+`flutter_gemma` and `flutter_onnxruntime` both declare `s.platform = :ios,
+'16.0'`. The floor is stated in three places — `ios/Podfile`,
+`IPHONEOS_DEPLOYMENT_TARGET` in the Xcode project, and `minimumIosVersion` in
+the parity test — and the test fails if they disagree.
+
 **Zero-Wait RAG:** `SyncService.seedFromAssets()` runs from `main.dart` on **every** launch, independent of the model. It is idempotent (skips topics already at `bundledVersion`). Do not move it back behind the model-download flow — a sideloaded or already-present model then leaves the corpus permanently empty. Bump `SyncService.bundledVersion` whenever the shipped Markdown changes.
 
 ## State Management (Riverpod 2.x)
@@ -120,6 +161,7 @@ could not return a row on a device while every test passed. Test through
 - `lib/models/doc_topic.dart` — the 18 India situations; single source of truth for asset paths, DB topic keys, and RAG filters
 - `lib/utils/prompt_builder.dart` — Instruction-last prompt template for 2B model
 - `lib/utils/query_expander.dart` + `expansion_terms.dart` — synonym and Hinglish expansion
+- `lib/services/platform_storage.dart` — the only platform-conditional code in `lib/`
 - `lib/screens/` — one file per full-page route
 - `lib/widgets/` — reusable UI components (`MessageBubble`, `SyncStatusBanner`)
 
@@ -131,6 +173,10 @@ could not return a row on a device while every test passed. Test through
 - **`maxTokens` in flutter_gemma is the FULL context window (prompt + reply), not an output cap.** It is `kContextTokens` in `llm_service.dart`.
 - Token budget: `kMaxPromptTokens` = 2048 context − 512 reserved output − 84 safety = 1452 prompt tokens. `PromptBuilder` derives its budget from this constant so the two cannot drift.
 - Android: `minSdk 24`, `abiFilters: ["arm64-v8a"]`, `largeHeap="true"`
+- iOS: deployment target 16.0, arm64 only, `increased-memory-limit` +
+  `extended-virtual-addressing` entitlements (the `largeHeap` analogue). The
+  entitlements only take effect on a signed build, so a simulator run proves
+  nothing about memory behaviour.
 
 ## Content and model updates
 

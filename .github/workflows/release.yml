@@ -10,6 +10,13 @@ name: Release
 # permanently and publicly downloadable. The per-push CI artifact is neither:
 # it expires after seven days and requires a GitHub login, so it was never a
 # distribution channel despite looking like one.
+#
+# The iOS job below runs at the same tag against the same commit, so a release
+# cannot exist for one platform and not the other. It stops short of publishing
+# an installable iOS build: there is no sideloading on iOS, so distribution
+# means TestFlight or the App Store, which means an Apple Developer account and
+# the four secrets listed in that job. Without them it still builds and still
+# fails the release if the iOS project is broken at the tag.
 on:
   push:
     tags: ['v*']
@@ -157,3 +164,68 @@ jobs:
 
             Not medical advice, and not a substitute for emergency services
             (112 in India).
+
+  # Runs against the same tag and the same commit as the APK job. Independent of
+  # it on purpose: an Android signing problem should not hide an iOS compile
+  # failure, and vice versa.
+  ios:
+    name: Build iOS at the tag
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: '3.41.4'
+          channel: 'stable'
+          cache: true
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      - name: Verify the shipped artifacts are present
+        run: |
+          for f in corpus.json passages.f32 passages.f32.json tokenizer.bin; do
+            test -s "assets/index/$f" || { echo "::error::missing assets/index/$f"; exit 1; }
+          done
+
+      - name: Test
+        run: flutter test
+
+      # Same reasoning as the APK: the version has to come from the tag. On iOS
+      # it is CFBundleShortVersionString and CFBundleVersion, and App Store
+      # Connect rejects an upload whose CFBundleVersion it has already seen —
+      # the exact iOS analogue of Android refusing an equal versionCode.
+      - name: Build iOS (unsigned)
+        run: |
+          TAG="${{ github.event.inputs.tag || github.ref_name }}"
+          flutter build ios --release --no-codesign \
+            --build-name="${TAG#v}" \
+            --build-number="${{ github.run_number }}"
+
+      - name: Report what was built
+        run: |
+          APP=build/ios/iphoneos/Runner.app
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' "$APP/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :CFBundleVersion' "$APP/Info.plist"
+          ls "$APP/Frameworks/App.framework/flutter_assets/assets/index"
+          du -sh "$APP"
+
+      # An unsigned .app cannot be installed on a phone. It is uploaded so the
+      # build is inspectable — bundle contents, Info.plist, entitlements — and
+      # so a broken tag is visible without a Mac.
+      #
+      # To publish to TestFlight instead, add these four repository secrets and
+      # replace this step with an xcodebuild archive + export:
+      #   APPLE_CERTIFICATE_BASE64, APPLE_CERTIFICATE_PASSWORD,
+      #   APPLE_PROVISIONING_PROFILE_BASE64, APPLE_API_KEY
+      # Nothing here is wired up speculatively, because a signing pipeline that
+      # has never run once is not a signing pipeline.
+      - name: Upload the unsigned app bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: survive-ai-ios-unsigned
+          path: build/ios/iphoneos/Runner.app
+          retention-days: 14

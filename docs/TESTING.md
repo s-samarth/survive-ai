@@ -39,7 +39,7 @@ cd python
 
 ---
 
-## The two parity tests
+## The three parity tests
 
 ### Tokenizer — exact
 
@@ -50,6 +50,22 @@ whitespace, the empty string, a 200-character run, and both task prefixes.
 
 A wrong subword split does not throw. It produces a perfectly reasonable vector
 somewhere else in the space. This is the only cheap way to catch it.
+
+### Platform — Android against iOS
+
+`test/platform_parity_test.dart` reads `android/` and `ios/` as data and asserts
+they still describe the same app: bundle identifier, display name, version
+source, minimum OS, network posture, backup posture, arm64-only, memory
+headroom, and that no asset is bundled by one platform's build system instead of
+`pubspec.yaml`. It also scans every plugin `.podspec` in the resolved package
+set and fails if one now needs a higher iOS deployment target than `ios/Podfile`
+declares.
+
+Platform drift does not throw either. A drifted iOS project compiles perfectly
+well and behaves differently — which is the same shape of problem as a wrong
+subword split, and the same reason to check it mechanically. It runs on the
+Linux runner; the macOS job in `.github/workflows/ios.yml` proves the project
+also compiles. Full reasoning in [PLATFORM_PARITY.md](PLATFORM_PARITY.md).
 
 ### Retrieval — scores exactly, ranking approximately
 
@@ -130,6 +146,15 @@ The plugin call itself has **never executed**. Three questions need hardware:
 
 Everything else — chunking, vectors, tokenization, cosine, fusion, routing,
 FTS, prompt budgeting, the safety guard — is covered without a device.
+
+**On iOS, nothing has run on hardware at all.** The project was generated and
+configured on Linux; CI proves it compiles and that the parity invariants hold.
+Three iOS-specific questions are open on top of the three above: whether
+`sqflite_common_ffi` resolves sqlite3 (and FTS5) on iOS the way it does on
+Android, whether the memory entitlements keep a 2B model alive under jetsam, and
+whether the backup-exclusion channel actually marks the model directory.
+`device-test.yml` is Firebase Test Lab, which is Android only; there is no iOS
+farm wired up.
 
 ---
 
