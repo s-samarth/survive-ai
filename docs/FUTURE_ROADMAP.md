@@ -9,7 +9,7 @@ This document outlines what comes after the MVP (Phases 0–4). Items are groupe
 The current implementation is a working offline Android app targeting 6 GB
 devices (8 GB recommended):
 
-- Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~500MB) via flutter_gemma (MediaPipe LLM Inference), CPU backend
+- Flutter Android app with on-device Gemma 2B IT (`gemma-2b-it-cpu-int4.bin`, ~1.3 GB) via flutter_gemma (MediaPipe LLM Inference), CPU backend
 - First-launch flow: disclaimer, WiFi check, resumable model download, SHA-256 verification, doc sync
 - 3-leg hybrid RAG: BM25 exact + BM25 on synonym-expanded queries (survival, romanised Hindi, India-specific) + dense cosine against EmbeddingGemma vectors, merged via weighted Reciprocal Rank Fusion (K=60). Recall@5 89.7%
 - Instruction-last prompt engineering: short instruction (~60 tokens) placed right before the question where 2B models attend most strongly

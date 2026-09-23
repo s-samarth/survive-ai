@@ -158,9 +158,10 @@ jobs:
             ```
 
             Requires Android 7.0+ and a 64-bit ARM device. 6 GB RAM minimum,
-            8 GB recommended. The app downloads its ~500 MB language model over
-            WiFi on first launch; the optional 175 MB search model can be added
-            later from Settings.
+            8 GB recommended. The app downloads its 1.3 GB language model over
+            Wi-Fi on first launch (never mobile data); the optional 175 MB
+            search model can be added later from Settings. Budget about 2 GB of
+            free storage.
 
             Not medical advice, and not a substitute for emergency services
             (112 in India).

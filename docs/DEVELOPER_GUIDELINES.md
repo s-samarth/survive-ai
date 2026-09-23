@@ -228,92 +228,36 @@ void main() {
 
 ## Adding a New Survival Doc
 
-This section is for contributions to the **survive-ai-docs** repo (separate from this app repo).
+The guides live in this repository, one per situation, in
+`docs/survival_guides/{topic}.md`. The 18 topics are fixed by the `DocTopic`
+enum in [lib/models/doc_topic.dart](../lib/models/doc_topic.dart).
 
-### Step 1: Write the Doc
+### Editing a guide
 
-Follow this Markdown template:
+1. Edit the Markdown. No speculation, no medication dosages, and write for
+   someone who has never done this before. Medical content needs SME review.
+2. Rebuild the offline index (`python/`, see its README) so `assets/index/`
+   matches the new text, and bump `SyncService.bundledVersion`.
+3. Update `manifest.json` at the repo root: set every guide's `version` to the
+   new `bundledVersion`, put the new `sha256` on the edited guide
+   (`shasum -a 256 docs/survival_guides/{topic}.md`), and bump the top-level
+   `version`.
 
-```markdown
-# Title (short, descriptive)
+`test/manifest_test.dart` fails if any of the three drift apart.
 
-## Overview
-1-2 sentences explaining what this guide covers and when to use it.
+### How installed apps pick it up
 
-## When to Use
-Specific situations where this knowledge applies.
+Every install fetches `manifest.json` from `main` on Wi-Fi. A guide whose
+`version` differs from the one on the phone is downloaded, rejected unless its
+bytes hash to the listed `sha256`, and re-indexed on the device. Merging a
+guide change to `main` therefore reaches existing installs without an APK —
+but they index it with the runtime chunker and without shipped vectors, so
+retrieval on that guide is weaker than in a fresh build. Ship a release too.
 
-## Materials Needed (if applicable)
-- Item 1
-- Item 2
+### Adding a topic
 
-## Procedure
-
-### Step 1: First Action
-Clear, specific instruction. No more than 3 sentences.
-
-### Step 2: Next Action
-...
-
-## Warning Signs
-Things that indicate the situation is worsening.
-
-## Sources
-- Source 1 (e.g., US Army Field Manual FM 21-76, Chapter X)
-- Source 2
-```
-
-**Content standards:**
-- Every factual claim must have a source in the Sources section
-- No speculation — if uncertain, say "consult a medical professional when available"
-- No specific medication dosages
-- Write for someone who has never done this before
-
-### Step 2: Place the File
-
-```
-survive-ai-docs/docs/{topic}/{descriptive_filename}.md
-```
-
-Topic must be one of: `war`, `medical`, `jungle`, `desert`, `urban`, `general`.
-
-### Step 3: Update manifest.json
-
-```json
-{
-  "id": "medical/tourniquet",
-  "filename": "docs/medical/tourniquet.md",
-  "topic": "medical",
-  "title": "Tourniquet Application",
-  "version": "1.0",
-  "sha256": "<sha256 of file content>",
-  "url": "https://raw.githubusercontent.com/survive-ai/survive-ai-docs/main/docs/medical/tourniquet.md"
-}
-```
-
-Compute SHA-256: `shasum -a 256 docs/medical/tourniquet.md`
-
-Increment the top-level `version` in manifest.json (format: `YYYYMMDD`).
-
-### Step 4: Open a PR
-
-- PR title: `docs: add {topic}/{filename}`
-- PR description: explain what the doc covers, who it helps, and list your sources
-- Requires 1 maintainer approval before merge
-
----
-
-## Adding a New Topic Category
-
-If you want to add a topic beyond the current 6 (war, medical, jungle, desert, urban, general):
-
-1. Add the folder in `survive-ai-docs/docs/{new_topic}/`
-2. Add at least 3 docs to the new topic before proposing it
-3. Update `manifest.json` with the new docs
-4. In the Flutter app:
-   - Add `newTopic` to the `DocTopic` enum in [lib/models/doc_chunk.dart](../lib/models/doc_chunk.dart)
-   - Add a tile to the `_topics` list in [lib/screens/topic_browser_screen.dart](../lib/screens/topic_browser_screen.dart)
-5. Open PRs to both repos
+Needs an app release: add the value to `DocTopic`, write the guide, rebuild the
+index, and add the entry to `manifest.json`.
 
 ---
 

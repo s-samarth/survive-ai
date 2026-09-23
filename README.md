@@ -86,12 +86,12 @@ Because "fallback" implies the network might work. In a conflict zone, it won't.
 │         │          DatabaseService (SQLite)              │
 │         │     (docs, chunks, chunks_fts via FTS5)       │
 │         │                                                │
-│  gemma-2b-it-cpu-int4.bin  (~500MB, INT4 quantized)     │
+│  gemma-2b-it-cpu-int4.bin  (~1.3 GB, INT4 quantized)    │
 │  /docs/{topic}/*.md        (~20MB survival guides)      │
 │  survive_ai.db             (~10MB indexed chunks)       │
 └─────────────────────┬────────────────────────────────────┘
                       │ WiFi only (one-time setup + sync)
-               GitHub: survive-ai-docs
+               GitHub: manifest.json 
 ```
 
 ### Memory Budget
@@ -224,7 +224,7 @@ protections:
 | Component | Choice | Why |
 |---|---|---|
 | Framework | Flutter (Dart) | Cross-platform, Material 3, single codebase |
-| On-device LLM | Gemma 2B IT (INT4, ~500MB) | Smallest capable model; CPU backend; 6 GB device floor |
+| On-device LLM | Gemma 2B IT (INT4, ~1.3 GB) | Smallest capable model; CPU backend; 6 GB device floor |
 | LLM Runtime | flutter_gemma (MediaPipe) | Google's official on-device inference; streaming output |
 | RAG Retrieval | SQLite FTS5 (BM25) | Built into sqflite; zero extra dependencies; sub-50ms |
 | Vocabulary bridge | Query expansion (pure Dart) | Survival synonyms, romanised Hindi, India-specific nouns; zero memory |
@@ -296,7 +296,7 @@ python/
 
 ### First Launch
 `DisclaimerScreen` → acknowledge → `_EntryRouter` checks for the model →
-`SetupScreen` fetches `manifest.json` → downloads Gemma 2B IT (~500 MB,
+`SetupScreen` fetches `manifest.json` → downloads Gemma 2B IT (~1.3 GB,
 resumable, SHA-256 verified) → model loaded → `HomeScreen`. The corpus is
 seeded from bundled assets on **every** launch, independent of the model, so a
 sideloaded build is never left with an empty index. The query encoder is a
@@ -376,7 +376,7 @@ a login, and are debug-signed. See [docs/INSTALLATION.md](docs/INSTALLATION.md).
 Survive AI welcomes contributions from developers, survival experts, medics, translators, and field workers.
 
 - **App code** — open a PR to this repo. Follow the [Developer Guidelines](docs/DEVELOPER_GUIDELINES.md).
-- **Survival docs** — contribute to the [survive-ai-docs](https://github.com/survive-ai/survive-ai-docs) repo. Medical content requires SME review.
+- **Survival docs** — edit `docs/survival_guides/` in this repo and update `manifest.json` ([how](docs/DEVELOPER_GUIDELINES.md#adding-a-new-survival-doc)). Medical content requires SME review.
 
 **What we will not build:** real-time communication, location tracking, telemetry, paid features, AI-generated medication prescriptions, or political content.
 

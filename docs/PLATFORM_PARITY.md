@@ -101,7 +101,7 @@ wrong. Each one is asserted in the parity test in its platform-specific form.
 ### Backup
 
 Android sets `android:allowBackup="false"` and is done. iOS has no such switch:
-everything under Documents goes to iCloud by default, which here means a ~500 MB
+everything under Documents goes to iCloud by default, which here means a ~1.3 GB
 model, a 175 MB encoder, a copy of the corpus and a rebuildable SQLite index
 landing in a user's 5 GB free tier. Apple's guidelines call that pattern out
 specifically and it is a routine review rejection.
@@ -111,7 +111,7 @@ The iOS equivalent is per-directory: `PlatformStorage.excludeFromBackup()`
 `ios/Runner/AppDelegate.swift`, called by the three services that write to
 Documents — `DownloadService`, `SyncService`, `DatabaseService`. On Android
 every call is a no-op. The parity test asserts that all three still call it,
-because a service that quietly stops calling it puts 500 MB back into iCloud.
+because a service that quietly stops calling it puts 1.3 GB back into iCloud.
 
 Moving the model to `Library/Caches`, which is never backed up, would trade one
 problem for a worse one: iOS purges Caches under disk pressure, and an offline
@@ -130,7 +130,7 @@ work.
 
 ### Sideloading the model
 
-Android's escape hatch from a 500 MB first-launch download is `adb push` into
+Android's escape hatch from a 1.3 GB first-launch download is `adb push` into
 external storage, which `DownloadService.modelSearchPaths` searches. iOS has no
 external storage; the equivalent is `UIFileSharingEnabled` plus
 `LSSupportsOpeningDocumentsInPlace`, which exposes the app's Documents folder in
