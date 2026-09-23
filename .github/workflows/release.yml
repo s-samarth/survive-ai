@@ -126,18 +126,63 @@ jobs:
           echo "sha=$(cut -d' ' -f1 < "$NAME.sha256")" >> "$GITHUB_OUTPUT"
           echo "size=$(du -h "$NAME" | cut -f1)" >> "$GITHUB_OUTPUT"
 
-      # Fails the release if the APK is signed with the Android debug key, which
-      # is what the Gradle fallback produces. Checking the output beats trusting
-      # that the secret was wired up correctly.
-      - name: Reject a debug-signed APK
+      # Fails the release unless the APK is signed by the project's own release
+      # key. Checking the output beats trusting that the secret was wired up.
+      #
+      # apksigner, not keytool: with minSdk 24 AGP signs with APK Signature
+      # Scheme v2/v3 only and writes no v1 JAR signature, so
+      # `keytool -printcert -jarfile` finds no signer, prints nothing, and a
+      # grep for the debug key passes vacuously. It did exactly that for
+      # v2.1.0. apksigner reads the v2/v3 blocks, and exits non-zero if the
+      # signature does not verify at all.
+      #
+      # Three checks, each closing a different hole: exactly one signer (an
+      # empty result is a failure, not a pass), not the Android debug key, and
+      # the cert digest equals the release cert's. The last one alone would
+      # suffice; the first two make the failure message say what went wrong.
+      #
+      # EXPECTED_CERT_SHA256 is public (it is the cert, not the key) and is what
+      # users can compare against `apksigner verify --print-certs` themselves.
+      # Rotating the key means changing it here, deliberately.
+      #
+      # Log note: the ANDROID_KEY_ALIAS secret's value is "survive-ai", so
+      # GitHub masks every occurrence of that string in this job's logs as ***
+      # (file names, the release title). Cosmetic; renaming the alias would
+      # need the keystore re-exported, which is not worth it for log output.
+      - name: Verify the APK is signed with the release key
+        env:
+          APK: ${{ steps.artifact.outputs.name }}
+          EXPECTED_CERT_SHA256: 630a587b4d65689672c0639f6a9df58b7bab0072b93b3f133177b567d5c3e630
         run: |
-          OWNER=$(keytool -printcert -jarfile "${{ steps.artifact.outputs.name }}" \
-                  | grep -m1 'Owner:' || true)
-          echo "Signed by: $OWNER"
-          if echo "$OWNER" | grep -q 'CN=Android Debug'; then
+          APKSIGNER=$(ls -d "$ANDROID_HOME"/build-tools/*/apksigner 2>/dev/null | sort -V | tail -1 || true)
+          if [ -z "$APKSIGNER" ]; then
+            echo "::error::apksigner not found under \$ANDROID_HOME/build-tools."
+            exit 1
+          fi
+          echo "Using $APKSIGNER"
+
+          if ! CERTS=$("$APKSIGNER" verify --verbose --print-certs "$APK"); then
+            echo "$CERTS"
+            echo "::error::apksigner could not verify the APK signature."
+            exit 1
+          fi
+          echo "$CERTS"
+
+          SIGNERS=$(echo "$CERTS" | grep -cE '^Signer #[0-9]+ certificate DN:' || true)
+          if [ "$SIGNERS" -ne 1 ]; then
+            echo "::error::Expected exactly one signer, found $SIGNERS; refusing to publish."
+            exit 1
+          fi
+          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
             echo "::error::APK is debug-signed; refusing to publish."
             exit 1
           fi
+          DIGEST=$(echo "$CERTS" | sed -n 's/^Signer #1 certificate SHA-256 digest: *//p' | tr 'A-F' 'a-f')
+          if [ "$DIGEST" != "$EXPECTED_CERT_SHA256" ]; then
+            echo "::error::Signer cert SHA-256 is '$DIGEST', expected $EXPECTED_CERT_SHA256; refusing to publish."
+            exit 1
+          fi
+          echo "Signed with the release key ($DIGEST)."
 
       - name: Publish the release
         uses: softprops/action-gh-release@v2
