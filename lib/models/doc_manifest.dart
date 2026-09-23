@@ -72,6 +72,10 @@ class DocEntry {
   final String version;
   final String url;
 
+  /// Lowercase hex SHA-256 of the guide's bytes. Required: a guide whose
+  /// download cannot be checked is not ingested.
+  final String sha256;
+
   const DocEntry({
     required this.id,
     required this.filename,
@@ -79,6 +83,7 @@ class DocEntry {
     required this.title,
     required this.version,
     required this.url,
+    required this.sha256,
   });
 
   factory DocEntry.fromJson(Map<String, dynamic> json) => DocEntry(
@@ -88,5 +93,6 @@ class DocEntry {
     title: json['title'] as String,
     version: json['version'] as String,
     url: json['url'] as String,
+    sha256: json['sha256'] as String,
   );
 }

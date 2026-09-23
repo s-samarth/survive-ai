@@ -195,7 +195,7 @@ test android models list` prints the catalogue; choose one 6 GB model and one
 8 GB model to match the stated floor and recommendation.
 
 The limitation to know in advance: **a robo crawl cannot answer a survival
-question.** The app needs a ~500 MB model download before it will generate
+question.** The app needs a ~1.3 GB model download before it will generate
 anything, and Test Lab devices are wiped between runs. So a robo run tells you
 the app installs, launches, navigates and does not OOM at idle. To exercise a
 real turn you need an instrumentation test that waits for the download, or a

@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../providers/providers.dart';
 import '../services/embedding/encoder_download.dart';
+import '../services/network_policy.dart';
 
 /// Offers the optional query encoder, and says plainly what it buys.
 ///
@@ -29,6 +30,15 @@ class _EncoderDownloadTileState extends ConsumerState<EncoderDownloadTile> {
   String? _message;
 
   Future<void> _download() async {
+    if (!await NetworkPolicy.onWifi()) {
+      if (mounted) {
+        setState(
+          () =>
+              _message = 'Connect to Wi-Fi first. This never uses mobile data.',
+        );
+      }
+      return;
+    }
     setState(() {
       _progress = 0;
       _message = null;

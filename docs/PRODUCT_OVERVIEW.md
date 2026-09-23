@@ -76,7 +76,7 @@ Three things have converged to make this possible in 2026:
 
 2. **Smartphone penetration in conflict regions is high.** Even in war-torn areas, 60–80% of people carry Android smartphones — the hardware for Survive AI is already in their hands.
 
-3. **On-device AI is finally small enough.** Models like Gemma 2B IT run on a mid-range Android phone with 6 GB RAM, and a 300M search model fits alongside one. A 500 MB download is all that is needed.
+3. **On-device AI is finally small enough.** Models like Gemma 2B IT run on a mid-range Android phone with 6 GB RAM, and a 300M search model fits alongside one. A one-time 1.3 GB download on Wi-Fi is all that is needed.
 
 ---
 
@@ -101,7 +101,7 @@ Three things have converged to make this possible in 2026:
 ### First Launch (WiFi required, one time only)
 1. User opens the app and accepts the safety disclaimer
 2. App detects WiFi and fetches `manifest.json` from GitHub
-3. Downloads the on-device AI model (~500MB, resumable)
+3. Downloads the on-device AI model (~1.3 GB, resumable)
 4. Downloads initial survival docs and indexes them into local SQLite
 5. Ready — disconnect from the internet. The app works forever offline.
 

@@ -1,29 +1,38 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:connectivity_plus/connectivity_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../providers/providers.dart';
 import '../services/download_service.dart';
 import '../services/llm_service.dart';
+import '../services/network_policy.dart';
 import 'home_screen.dart';
 
 /// Compiled-in fallback for the model download, used when the manifest is
 /// unreachable (which is the normal case on a first install over a bad link).
 /// The manifest, when it loads, wins — that is how a model upgrade is shipped
 /// without shipping a new APK.
+///
+/// Pinned to a commit, not `main`, so the bytes behind the URL cannot change
+/// under the size and hash below.
 const _fallbackModelUrl = String.fromEnvironment(
   'SURVIVE_AI_MODEL_URL',
   defaultValue:
-      'https://huggingface.co/ASahu16/gemma/resolve/main/gemma-2b-it-cpu-int4.bin',
+      'https://huggingface.co/ASahu16/gemma/resolve/'
+      '588b06cec7e780aba94316ad5f47c772f51c8938/gemma-2b-it-cpu-int4.bin',
 );
-const _fallbackModelSizeBytes = 1350000000;
 
-/// Lowercase hex SHA-256 of the fallback model artifact.
-///
-/// Empty means "unknown" — the size check still runs, but a corrupt body
-/// cannot be detected before load. Pin this (or publish `sha256` in the
-/// manifest) for any artifact you control.
-const _fallbackModelSha256 = String.fromEnvironment('SURVIVE_AI_MODEL_SHA256');
+/// Exact byte count of the file above. [DownloadService] compares for
+/// equality, so an approximation fails every download: this was once
+/// 1350000000, and a first install with no manifest could never finish.
+const _fallbackModelSizeBytes = 1346559040;
+
+/// Lowercase hex SHA-256 of the fallback model artifact (its Hugging Face LFS
+/// object id). Overridable together with the URL.
+const _fallbackModelSha256 = String.fromEnvironment(
+  'SURVIVE_AI_MODEL_SHA256',
+  defaultValue:
+      '176452e0eef32e7cd477e5609160278f3f5cbfeeb46d2cb2d37bd631af1b0bea',
+);
 
 /// Handles first-launch setup: WiFi check → model download → doc sync.
 ///
@@ -66,11 +75,8 @@ class _SetupScreenState extends ConsumerState<SetupScreen> {
       return;
     }
 
-    // Need internet to download the model
-    final connectivity = await Connectivity().checkConnectivity();
-    final hasInternet = connectivity.any((r) => r != ConnectivityResult.none);
-
-    if (!hasInternet) {
+    // The model is 1.3 GB: Wi-Fi only, never mobile data.
+    if (!await NetworkPolicy.onWifi()) {
       setState(() {
         _phase = _SetupPhase.waitingForWifi;
         _statusText =

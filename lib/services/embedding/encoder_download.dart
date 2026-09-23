@@ -30,22 +30,30 @@ class EncoderDownload {
   /// the encoder before any manifest has been published. The manifest wins
   /// whenever it has one, which is what lets the encoder be swapped without
   /// shipping an APK.
+  ///
+  /// Pinned to a commit with exact sizes and hashes, like the generator: the
+  /// shipped passage vectors were made by this exact graph, and a different
+  /// one would score queries against them without any error.
   static const List<ModelInfo> fallback = [
     ModelInfo(
       name: OnnxEmbeddingService.graphFile,
-      url:
-          'https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/'
-          'resolve/main/onnx/model_q4f16.onnx',
-      sizeBytes: 721920,
+      url: '$_repo/onnx/model_q4f16.onnx',
+      sizeBytes: 705221,
+      sha256:
+          '4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f',
     ),
     ModelInfo(
       name: OnnxEmbeddingService.weightsFile,
-      url:
-          'https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/'
-          'resolve/main/onnx/model_q4f16.onnx_data',
-      sizeBytes: 183500800,
+      url: '$_repo/onnx/model_q4f16.onnx_data',
+      sizeBytes: 175410176,
+      sha256:
+          'c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf',
     ),
   ];
+
+  static const String _repo =
+      'https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/'
+      'resolve/5090578d9565bb06545b4552f76e6bc2c93e4a66';
 
   /// Total bytes to fetch, for a size shown before the user commits.
   static int totalBytes(List<ModelInfo> files) =>
@@ -74,6 +82,7 @@ class EncoderDownload {
           url: file.url,
           filename: file.name,
           subfolder: subfolder,
+          expectedBytes: file.sizeBytes,
           expectedSha256: file.sha256,
           onProgress: (downloaded, _) {
             if (total > 0) {

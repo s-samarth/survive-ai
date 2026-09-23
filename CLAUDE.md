@@ -93,9 +93,19 @@ triggers, orphaning the old index row and appending a duplicate.
 
 **Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend because GPU inference draws from a shared pool the OS cannot reclaim under pressure. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
 
-**Offline-first:** No cloud calls at runtime. WiFi-gated sync fetches a `manifest.json` from GitHub, downloads changed Markdown docs, re-indexes via chunker → FTS5.
+**Offline-first:** No cloud calls at runtime. WiFi-gated sync fetches `manifest.json` from this repo's `main`, downloads changed Markdown docs, rejects any whose SHA-256 does not match, re-indexes via chunker → FTS5. `test/manifest_test.dart` keeps the manifest in step with the guides and `bundledVersion`.
 
-**Embedding service (disabled):** `EmbeddingService.isEnabled` is false, so `RagService` skips the dense leg entirely — no vector is allocated on the query path. Intentional: a second native ML runtime alongside Gemma does not fit the memory budget on a 4-6 GB device. `EmbeddingGemma-300m` runs in under 200 MB and is the candidate for enabling it; the plumbing is a one-flag change.
+**Embedding service (optional download):** the base `EmbeddingService` has
+`isEnabled` false, so until the 175 MB EmbeddingGemma-300m encoder is fetched
+from Settings, `RagService` runs the two lexical legs only (Recall@5 ≈ 81.5%
+vs 89.7% with the dense leg). Deliberately not part of first-run setup: the
+1.3 GB generator is already between a person and an answer.
+
+**Network: Wi-Fi only.** Every download (model, encoder, manifest, guides) goes
+through `NetworkPolicy.onWifi()`; mobile data counts as offline. Model and
+encoder fallbacks are pinned to a Hugging Face commit with exact byte counts
+and SHA-256 — `DownloadService` compares size for equality, so an approximate
+`sizeBytes` fails every download.
 
 **Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts`
 (FTS5 virtual table for BM25) + `citations`. The `chunks.embedding` BLOB holds
@@ -130,7 +140,7 @@ compiles.
 
 **iOS backup exclusion is not optional.** Android switches backup off wholesale
 with `android:allowBackup="false"`. iOS has no such switch — everything under
-Documents goes to iCloud, which here is a ~500 MB model plus a rebuildable
+Documents goes to iCloud, which here is a ~1.3 GB model plus a rebuildable
 index. `PlatformStorage.excludeFromBackup()` (method channel to
 `ios/Runner/AppDelegate.swift`) is called by `DownloadService`, `SyncService`
 and `DatabaseService` right after each creates its directory, and is a no-op on
@@ -168,7 +178,7 @@ the parity test — and the test fails if they disagree.
 ## Model Config
 
 - Gemma 2B IT, INT4 quantized, CPU backend via `flutter_gemma` (MediaPipe LLM Inference)
-- Model file: `gemma-2b-it-cpu-int4.bin` (~500 MB)
+- Model file: `gemma-2b-it-cpu-int4.bin` (1,346,559,040 bytes, ~1.3 GB)
 - Sampling: temp=0.7, top_k=40
 - **`maxTokens` in flutter_gemma is the FULL context window (prompt + reply), not an output cap.** It is `kContextTokens` in `llm_service.dart`.
 - Token budget: `kMaxPromptTokens` = 2048 context − 512 reserved output − 84 safety = 1452 prompt tokens. `PromptBuilder` derives its budget from this constant so the two cannot drift.

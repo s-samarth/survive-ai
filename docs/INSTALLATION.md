@@ -66,7 +66,7 @@ Open http://<your-ip>:8080/app-release.apk on the device browser
 
 ### Step 4: First Launch Setup
 
-The app requires a **one-time WiFi connection** to download the AI model (~500MB) and initial survival docs.
+The app requires a **one-time WiFi connection** to download the AI model (~1.3 GB) and initial survival docs.
 
 1. Open **Survive AI**
 2. Read and accept the disclaimer
@@ -245,12 +245,12 @@ For organizations deploying Survive AI to multiple devices in the field:
 
 ### Pre-loading a Custom Doc Set
 
-You can configure a custom manifest URL pointing to your own GitHub fork of `survive-ai-docs`, pre-loaded with your organization's specific survival content:
+You can point a build at your own manifest, pre-loaded with your organization's specific survival content:
 
-1. Fork [survive-ai-docs](https://github.com/survive-ai/survive-ai-docs)
-2. Add your docs to `docs/{topic}/` and update `manifest.json`
-3. Update the `_manifestUrl` constant in `lib/services/sync_service.dart` to point to your fork's raw manifest URL
-4. Build a release APK from that source — this becomes your organization's pre-configured build
+1. Fork this repository
+2. Edit the guides in `docs/survival_guides/` and update `manifest.json` (see [Developer Guidelines](DEVELOPER_GUIDELINES.md#adding-a-new-survival-doc))
+3. Build with `--dart-define=SURVIVE_AI_MANIFEST_URL=https://raw.githubusercontent.com/<you>/survive-ai/main/manifest.json`
+4. That APK is your organization's pre-configured build
 
 ### Mass Deployment via USB
 

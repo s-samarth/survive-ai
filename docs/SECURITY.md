@@ -17,8 +17,8 @@ to a stranger. Chat history is a record of what someone was afraid of and when
 sensitive than the content itself suggests.
 
 **The network is hostile precisely when it exists.** The app is offline almost
-always, but it downloads a ~500 MB model and a corpus of guides over whatever
-connection is available. Those files become executable weights and the text
+always, but it downloads a ~1.3 GB model and a corpus of guides whenever it
+is on Wi-Fi. Those files become executable weights and the text
 someone acts on in an emergency.
 
 **Nobody will check a signature.** The app spreads by sideload, USB stick and
