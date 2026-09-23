@@ -138,8 +138,16 @@ jobs:
       #
       # Three checks, each closing a different hole: exactly one signer (an
       # empty result is a failure, not a pass), not the Android debug key, and
-      # the cert digest equals the release cert's. The last one alone would
-      # suffice; the first two make the failure message say what went wrong.
+      # every certificate digest printed equals the release cert's. The last one
+      # alone would suffice; the first two make the failure message say what
+      # went wrong.
+      #
+      # Parse loosely. The line prefix depends on the build-tools version and
+      # flags: `Signer #1 certificate ...` without --verbose, `V2 Signer:
+      # certificate ...` (one block per scheme) with it on build-tools 37. The
+      # first version of this step matched only the former and refused a
+      # correctly signed v2.1.1. So: count from `Number of signers:`, and take
+      # every `certificate SHA-256 digest:` line whatever precedes it.
       #
       # EXPECTED_CERT_SHA256 is public (it is the cert, not the key) and is what
       # users can compare against `apksigner verify --print-certs` themselves.
@@ -168,18 +176,18 @@ jobs:
           fi
           echo "$CERTS"
 
-          SIGNERS=$(echo "$CERTS" | grep -cE '^Signer #[0-9]+ certificate DN:' || true)
-          if [ "$SIGNERS" -ne 1 ]; then
-            echo "::error::Expected exactly one signer, found $SIGNERS; refusing to publish."
+          SIGNERS=$(echo "$CERTS" | sed -n 's/^Number of signers: *//p')
+          if [ "$SIGNERS" != 1 ]; then
+            echo "::error::Expected exactly one signer, found '${SIGNERS:-none}'; refusing to publish."
             exit 1
           fi
-          if echo "$CERTS" | grep -q 'CN=Android Debug'; then
+          if echo "$CERTS" | grep 'certificate DN:' | grep -q 'CN=Android Debug'; then
             echo "::error::APK is debug-signed; refusing to publish."
             exit 1
           fi
-          DIGEST=$(echo "$CERTS" | sed -n 's/^Signer #1 certificate SHA-256 digest: *//p' | tr 'A-F' 'a-f')
+          DIGEST=$(echo "$CERTS" | sed -n 's/.*certificate SHA-256 digest: *//p' | tr 'A-F' 'a-f' | sort -u)
           if [ "$DIGEST" != "$EXPECTED_CERT_SHA256" ]; then
-            echo "::error::Signer cert SHA-256 is '$DIGEST', expected $EXPECTED_CERT_SHA256; refusing to publish."
+            echo "::error::Signer cert SHA-256 is '$(echo $DIGEST)', expected $EXPECTED_CERT_SHA256; refusing to publish."
             exit 1
           fi
           echo "Signed with the release key ($DIGEST)."
