@@ -1,6 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'package:connectivity_plus/connectivity_plus.dart';
+import 'package:crypto/crypto.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
@@ -13,6 +13,7 @@ import '../models/doc_chunk.dart';
 import 'database_citations.dart';
 import 'database_service.dart';
 import 'index_loader_service.dart';
+import 'network_policy.dart';
 import 'chunker_service.dart';
 import 'embedding_service.dart';
 import 'platform_storage.dart';
@@ -22,24 +23,26 @@ import 'platform_storage.dart';
 /// Override at build time so a fork or a staging channel needs no code change:
 ///   flutter build apk --dart-define=SURVIVE_AI_MANIFEST_URL=https://.../manifest.json
 ///
-/// The default points at this project's docs repo. If it is unreachable the app
-/// is fully functional on its bundled corpus — sync is an enhancement, never a
-/// dependency.
+/// The default is `manifest.json` at the root of this repository, on `main`.
+/// Its guide versions equal [SyncService.bundledVersion], so a current install
+/// downloads nothing; `test/manifest_test.dart` keeps the two in step. If it is
+/// unreachable the app is fully functional on its bundled corpus — sync is an
+/// enhancement, never a dependency.
 const kManifestUrl = String.fromEnvironment(
   'SURVIVE_AI_MANIFEST_URL',
   defaultValue:
-      'https://raw.githubusercontent.com/samarthsaraswat/survive-ai-docs/main/manifest.json',
+      'https://raw.githubusercontent.com/s-samarth/survive-ai/main/manifest.json',
 );
 
 /// Handles WiFi-gated syncing of survival docs and model metadata from GitHub.
 ///
 /// On each app launch (or manual trigger):
-/// 1. Check connectivity — abort if no internet.
+/// 1. Check the network — abort unless on Wi-Fi ([NetworkPolicy]).
 /// 2. Fetch manifest.json from GitHub.
-/// 3. For each doc in manifest, compare SHA-256 with local DB checksum.
+/// 3. For each doc in manifest, compare its version with the local one.
 /// 4. Download only changed or new docs.
-/// 5. Verify checksum, write to disk, ingest into SQLite.
-/// 6. Compute TFLite embeddings for new chunks and store in DB.
+/// 5. Verify the SHA-256, write to disk, ingest into SQLite.
+/// 6. Embed the new chunks when the query encoder is installed.
 class SyncService {
   final DatabaseService _db;
   final ChunkerService _chunker;
@@ -110,11 +113,9 @@ class SyncService {
     }
   }
 
-  /// Returns true if the device has an active internet connection.
-  Future<bool> isOnline() async {
-    final result = await Connectivity().checkConnectivity();
-    return result.any((r) => r != ConnectivityResult.none);
-  }
+  /// Whether the app may use the network now: Wi-Fi or wired, never mobile
+  /// data. See [NetworkPolicy].
+  Future<bool> isOnline() => NetworkPolicy.onWifi();
 
   /// Check if a newer manifest is available without downloading docs.
   Future<SyncStatus> checkForUpdates() async {
@@ -156,7 +157,7 @@ class SyncService {
           continue; // Already up to date
         }
 
-        final content = await _downloadDoc(entry.url);
+        final content = await _downloadDoc(entry);
 
         // Write to disk
         // Both components come from the remote manifest. `basename` already
@@ -178,6 +179,7 @@ class SyncService {
 
         // Ingest into SQLite
         await _db.deleteChunksForDoc(entry.id);
+        await _db.deleteCitationsForDoc(entry.id);
         final chunks = _chunker.chunk(content, entry.id, entry.topic);
         await _db.insertChunks(chunks);
         await _db.upsertDoc({
@@ -185,7 +187,7 @@ class SyncService {
           'filename': entry.filename,
           'topic': entry.topic,
           'version': entry.version,
-          'checksum': '', // Maintain schema constraint
+          'checksum': entry.sha256,
           'last_synced': DateTime.now().millisecondsSinceEpoch,
         });
 
@@ -286,18 +288,25 @@ class SyncService {
     );
   }
 
-  Future<String> _downloadDoc(String url) async {
+  /// Download one guide and refuse it unless its bytes hash to the manifest's
+  /// SHA-256. A guide is read by someone acting on it in an emergency; a
+  /// truncated or substituted file must never reach the index.
+  Future<String> _downloadDoc(DocEntry entry) async {
     // Guides are executed as retrieval content and shown to someone acting on
     // them in an emergency; they do not travel in the clear.
-    final uri = Uri.tryParse(url);
+    final uri = Uri.tryParse(entry.url);
     if (uri == null || uri.scheme != 'https') {
-      throw ArgumentError.value(url, 'url', 'doc URLs must be https');
+      throw ArgumentError.value(entry.url, 'url', 'doc URLs must be https');
     }
     final response = await http.get(uri);
     if (response.statusCode != 200) {
-      throw Exception('Failed to download doc: $url');
+      throw Exception('Failed to download doc: ${entry.url}');
     }
-    return response.body;
+    final actual = sha256.convert(response.bodyBytes).toString();
+    if (actual != entry.sha256.toLowerCase()) {
+      throw Exception('Checksum mismatch for ${entry.id}: got $actual');
+    }
+    return utf8.decode(response.bodyBytes);
   }
 
   Future<Directory> _docsDirectory() async {

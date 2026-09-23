@@ -1,0 +1,190 @@
+{
+  "version": "2.1.0",
+  "model": {
+    "name": "gemma-2b-it-cpu-int4.bin",
+    "url": "https://huggingface.co/ASahu16/gemma/resolve/588b06cec7e780aba94316ad5f47c772f51c8938/gemma-2b-it-cpu-int4.bin",
+    "size_bytes": 1346559040,
+    "sha256": "176452e0eef32e7cd477e5609160278f3f5cbfeeb46d2cb2d37bd631af1b0bea",
+    "version": "1"
+  },
+  "embedder": [
+    {
+      "name": "embeddinggemma-300m-q4f16.onnx",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/5090578d9565bb06545b4552f76e6bc2c93e4a66/onnx/model_q4f16.onnx",
+      "size_bytes": 705221,
+      "sha256": "4df4a2a44253865800b8882a497badf67c2707a487267460813f78da339c753f",
+      "version": "1"
+    },
+    {
+      "name": "embeddinggemma-300m-q4f16.onnx_data",
+      "url": "https://huggingface.co/onnx-community/embeddinggemma-300m-ONNX/resolve/5090578d9565bb06545b4552f76e6bc2c93e4a66/onnx/model_q4f16.onnx_data",
+      "size_bytes": 175410176,
+      "sha256": "c9cc456a345e6aa9bc5fb75b54c10b3e0edbb4f80708f749dc4c45dbed5b6edf",
+      "version": "1"
+    }
+  ],
+  "docs": [
+    {
+      "id": "first_response_guide",
+      "filename": "first_response.md",
+      "topic": "first_response",
+      "title": "First Response",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/first_response.md",
+      "sha256": "b6bb3489f1661572aa33c83157d0e845f095930fdc0995e7792c1f3f3cb3010d"
+    },
+    {
+      "id": "blackout_guide",
+      "filename": "blackout.md",
+      "topic": "blackout",
+      "title": "No Network",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/blackout.md",
+      "sha256": "2afbb29252caf14a25890d4fa4e5fec79116a4fe5643baee641ca7aa35f68273"
+    },
+    {
+      "id": "medical_guide",
+      "filename": "medical.md",
+      "topic": "medical",
+      "title": "Medical Emergency",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/medical.md",
+      "sha256": "647b5f7984663a17d10c5fe20eba8385f769218aff638b96a4a563a2d3158763"
+    },
+    {
+      "id": "earthquake_guide",
+      "filename": "earthquake.md",
+      "topic": "earthquake",
+      "title": "Earthquake & Collapse",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/earthquake.md",
+      "sha256": "618d04d6c4351a3a5167549271a897ea25e5d1673f42718428e0e4ec0ddf1b49"
+    },
+    {
+      "id": "flood_guide",
+      "filename": "flood.md",
+      "topic": "flood",
+      "title": "Flood & Drowning",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/flood.md",
+      "sha256": "dacd8aef17a70c0352f1e8257bbeb76d92c77f475ffa9b2e8280d4847866dbe8"
+    },
+    {
+      "id": "cyclone_guide",
+      "filename": "cyclone.md",
+      "topic": "cyclone",
+      "title": "Cyclone & Tsunami",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/cyclone.md",
+      "sha256": "73074630aa083f19d455619f0a21da467e474aa151734c8d4550f03de4f01bad"
+    },
+    {
+      "id": "landslide_guide",
+      "filename": "landslide.md",
+      "topic": "landslide",
+      "title": "Landslide & Mountains",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/landslide.md",
+      "sha256": "532fe770f08173323948529552ab62f40d6db80d645353fecb5670c20cebe271"
+    },
+    {
+      "id": "fire_guide",
+      "filename": "fire.md",
+      "topic": "fire",
+      "title": "Fire & Gas",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/fire.md",
+      "sha256": "78c3d3cd78ea4322f8ab641a20085899c232e5ef5981f4f6a75450c1a895e783"
+    },
+    {
+      "id": "crowd_guide",
+      "filename": "crowd.md",
+      "topic": "crowd",
+      "title": "Stampede & Crowds",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/crowd.md",
+      "sha256": "f07d8979774f8de61fda6d4578d81b831b25d81acf512f7527f00ad949468b91"
+    },
+    {
+      "id": "unrest_guide",
+      "filename": "unrest.md",
+      "topic": "unrest",
+      "title": "Riot & Curfew",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/unrest.md",
+      "sha256": "dfed3e179247789616a2887fc14571ae29be59d6bfc74486a463fad758004f66"
+    },
+    {
+      "id": "blast_guide",
+      "filename": "blast.md",
+      "topic": "blast",
+      "title": "Blast & Attack",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/blast.md",
+      "sha256": "0e75731d2a8cd8c7941b92abd4cec29baca9488174af299ff89164f31b9fd06f"
+    },
+    {
+      "id": "war_guide",
+      "filename": "war.md",
+      "topic": "war",
+      "title": "War & Air Raid",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/war.md",
+      "sha256": "5ea157c85dfa4ec67d735fe4dd1684addc843e8b3acb3834fc0faeab8cdb9ae0"
+    },
+    {
+      "id": "chemical_guide",
+      "filename": "chemical.md",
+      "topic": "chemical",
+      "title": "Chemical & Industrial",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/chemical.md",
+      "sha256": "c6dc17e4cede2015f0758e6d6dd52500626994b5c2785de9db1fa79b5db602d0"
+    },
+    {
+      "id": "heat_cold_guide",
+      "filename": "heat_cold.md",
+      "topic": "heat_cold",
+      "title": "Heatwave & Cold Wave",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/heat_cold.md",
+      "sha256": "d126d2c681665d873a410e11bc6df7d7b62b296c343ba3fe132a186f6862ab90"
+    },
+    {
+      "id": "bites_guide",
+      "filename": "bites.md",
+      "topic": "bites",
+      "title": "Snakebite & Animals",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/bites.md",
+      "sha256": "c31c79044397cd41d89b96ed5d8e3ae7545a97aee5bff993a94c885887731d29"
+    },
+    {
+      "id": "water_food_guide",
+      "filename": "water_food.md",
+      "topic": "water_food",
+      "title": "Water, Food & Disease",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/water_food.md",
+      "sha256": "d8d9de1106f1cc3c4c4aff4a86cfd1fe01aff3ee63e4d883261b9e72b908f903"
+    },
+    {
+      "id": "shelter_guide",
+      "filename": "shelter.md",
+      "topic": "shelter",
+      "title": "Shelter & Stranded",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/shelter.md",
+      "sha256": "adfc1b6a0ff6d9c3786102d6dd334fc7cde62f8957d185993a370ff66b8457f1"
+    },
+    {
+      "id": "vulnerable_guide",
+      "filename": "vulnerable.md",
+      "topic": "vulnerable",
+      "title": "Children & Elderly",
+      "version": "bundled-3.0-index",
+      "url": "https://raw.githubusercontent.com/s-samarth/survive-ai/main/docs/survival_guides/vulnerable.md",
+      "sha256": "7489d7dc97bacc84da11d133952bb76d5be21e3193e62d3883fd2d6c1ac72a3f"
+    }
+  ]
+}
