@@ -386,6 +386,9 @@ Survive AI welcomes contributions from developers, survival experts, medics, tra
 
 Open-source. Humanitarian mission. Free forever.
 
+Licensed under the [Apache License 2.0](LICENSE). Files derived from Google's
+Gemma models remain under the Gemma Terms of Use — see [NOTICE.md](NOTICE.md).
+
 **Maintainer:** [@samarthsaraswat](https://github.com/samarthsaraswat)
 **Bug reports:** [github.com/survive-ai/survive-ai/issues](https://github.com/survive-ai/survive-ai/issues)
 **Security vulnerabilities:** email directly — do not open a public issue.

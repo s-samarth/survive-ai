@@ -73,6 +73,10 @@ guides are no substitute for emergency services (112 in India) or a clinician.
 
 ## Project licence
 
-This project does not yet carry a licence file. Until one is added, no licence
-is granted for the project's own code and content, and the third-party terms
-above continue to apply to the files they name regardless.
+Copyright 2026 Samarth Saraswat.
+
+The project's own code and content are licensed under the **Apache License,
+Version 2.0** — see [LICENSE](LICENSE). That licence covers what this project
+wrote. It does not relicense the Gemma-derived files listed above: those remain
+under the Gemma Terms of Use and Prohibited Use Policy, which travel with them
+regardless.
