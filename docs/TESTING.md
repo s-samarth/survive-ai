@@ -233,6 +233,52 @@ would tell you nothing about the device this targets.
 
 ---
 
+## Measuring memory
+
+`scripts/measure_memory.sh` samples a connected device or emulator and prints
+the breakdown, with `-o <name>` writing a CSV plus the full `dumpsys` from the
+worst moment.
+
+```
+device:     sdk_gphone64_arm64 (API 35, arm64-v8a)
+device RAM: 6.0 GB
+
+elapsed      TOTAL_PSS   NativeHeap     JavaHeap       Code     MemAvail
+--------  ------------ ------------ ------------ ---------- ------------
+0s              142 MB        38 MB        34 MB      34 MB      4210 MB
+25s            1679 MB      1546 MB        41 MB      34 MB      2402 MB
+```
+
+**Do not use Flutter DevTools for this.** DevTools shows the Dart heap, which
+is the least interesting number on the device: Gemma's weights are a native
+memory-mapped allocation made by MediaPipe below the Dart VM, so DevTools
+reports a few tens of MB while the process holds well over a gigabyte.
+
+Three columns, three different questions:
+
+- **TOTAL PSS** — what the process costs the system, shared pages divided among
+  everyone mapping them. The headline number, and a *ceiling* rather than a
+  hard cost: the mapped model pages are file-backed and clean, so the kernel can
+  evict them and fault them back in. That reclaimability is the entire reason
+  `llm_service.dart` pins the CPU backend.
+- **Native Heap** — MediaPipe's own allocations, where the KV cache lives. This
+  is the column that tests the session recycling in `LlmService`: it should
+  return to roughly the same level after each turn. A staircase across turns
+  means the old session is not being closed before the new one allocates.
+- **MemAvailable** — what the kernel thinks is left, device-wide. The app can
+  look fine while the device is one app-switch from killing it, and only this
+  column shows that.
+
+If the process disappears mid-run the script says so, reports the peak, and
+greps logcat for the `lowmemorykiller` / `am_kill` line. That is the result the
+6 GB claim actually rests on, so it is worth capturing deliberately rather than
+noticing afterwards.
+
+Numbers worth keeping go in [RESULTS.md](RESULTS.md), with the device and its
+RAM beside them — a peak PSS with no device attached to it means nothing.
+
+---
+
 ## Related
 
 - [EVALUATION.md](EVALUATION.md) — the Python-side harness
