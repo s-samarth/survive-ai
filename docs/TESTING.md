@@ -208,6 +208,9 @@ actually work on a 6 GB phone", an interactive session is the faster route.
 
 ### Wiring Test Lab into CI
 
+> **Parked.** `device-test.yml` and the other workflows are removed for now.
+> Restore with `git checkout cfadbe6 -- .github/workflows`.
+
 `.github/workflows/device-test.yml` runs on a release tag and on manual
 dispatch. It is **skipped unless `GCP_SA_KEY` is set**, so it costs nothing
 until you connect a project:

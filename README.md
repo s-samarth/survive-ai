@@ -323,7 +323,8 @@ peer-to-peer sharing where app stores are inaccessible.
 
 iOS has no equivalent. There is no sideloading, so an iOS build reaches a phone
 through TestFlight or the App Store, which means an Apple Developer account.
-The iOS project is built and verified at every tag (`.github/workflows/`), but
+The iOS project was built and verified at every tag (`.github/workflows/`,
+removed while the project is parked), but
 the release workflow publishes the APK only; the iOS artifact is an unsigned
 bundle for inspection. Wiring up signed distribution is a one-job change once
 the account exists — the secrets it needs are named in `release.yml`.

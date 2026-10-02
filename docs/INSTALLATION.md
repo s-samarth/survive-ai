@@ -184,7 +184,8 @@ git push origin v1.0.0
 ```
 
 `.github/workflows/release.yml` then builds, tests, signs, checksums and
-publishes. It **refuses to publish** if the signing secrets are absent, or if
+publishes. (The workflows are removed while the project is parked; pushing a
+tag does nothing until they are restored with `git checkout cfadbe6 -- .github/workflows`.) It **refuses to publish** if the signing secrets are absent, or if
 the finished APK turns out to be debug-signed.
 
 ### One-time signing setup

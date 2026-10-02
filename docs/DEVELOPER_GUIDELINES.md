@@ -321,6 +321,10 @@ Users verify APK authenticity: `shasum -a 256 app-release.apk`
 
 ## CI/CD (GitHub Actions)
 
+> **Parked.** The workflows below were removed while the project is on hold,
+> so nothing runs on push or tag. Restore them with
+> `git checkout cfadbe6 -- .github/workflows`. Until then, run the same checks locally.
+
 `.github/workflows/ci.yml` runs on every PR:
 
 ```yaml

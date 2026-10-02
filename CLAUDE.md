@@ -134,9 +134,15 @@ also scans every plugin podspec and fails if one now needs a higher iOS
 deployment target than `ios/Podfile` declares. It runs on Linux in the ordinary
 `flutter test` job. **When it fails, change the platform file, not the test** —
 a deliberate difference gets recorded in docs/PLATFORM_PARITY.md with its
-reason. The macOS build job (`.github/workflows/ios.yml`) is the other half: the
-parity test proves the iOS project is the same app, the build proves it
+reason. The macOS build job (`.github/workflows/ios.yml`) was the other half:
+the parity test proves the iOS project is the same app, the build proves it
 compiles.
+
+**No GitHub Actions workflows while the project is parked.** CI, release,
+device-test and iOS workflows were removed so nothing runs on push, tag or a
+schedule. Nothing checks your work remotely: run `flutter analyze` and
+`flutter test` locally before pushing. Restore all four with
+`git checkout cfadbe6 -- .github/workflows`.
 
 **iOS backup exclusion is not optional.** Android switches backup off wholesale
 with `android:allowBackup="false"`. iOS has no such switch — everything under

@@ -76,6 +76,10 @@ is recorded is parity; an exception that is deleted is drift.
 
 ### 3. The macOS build, when it matters (`.github/workflows/ios.yml`)
 
+> **Not running.** iOS is parked and all workflows are removed; the parity test
+> still runs locally under `flutter test`. Restore with
+> `git checkout cfadbe6 -- .github/workflows`.
+
 The parity test proves the iOS project still describes the same app. It cannot
 prove the project compiles. That needs Xcode, so it runs on `macos-15`, which
 bills at ten times the Linux rate — on every push to a shipping branch and on
