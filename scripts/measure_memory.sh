@@ -35,7 +35,7 @@ PACKAGE="com.surviveai.survive_ai"
 INTERVAL=5
 SAMPLES=0          # 0 = until interrupted
 OUT=""
-SERIAL=()
+SERIAL=""
 
 usage() {
   sed -n '2,40p' "$0" | sed 's/^# \{0,1\}//'
@@ -47,21 +47,26 @@ while getopts "i:n:o:s:p:h" opt; do
     i) INTERVAL="$OPTARG" ;;
     n) SAMPLES="$OPTARG" ;;
     o) OUT="$OPTARG" ;;
-    s) SERIAL=(-s "$OPTARG") ;;
+    s) SERIAL="$OPTARG" ;;
     p) PACKAGE="$OPTARG" ;;
     h) usage 0 ;;
     *) usage 2 ;;
   esac
 done
 
+# The serial is a plain string, not an array: macOS ships bash 3.2, where
+# expanding an empty array under `set -u` is an "unbound variable" error, so
+# `adb "${SERIAL[@]}"` died on the first call whenever -s was not passed.
+adb_() { if [ -n "$SERIAL" ]; then adb -s "$SERIAL" "$@"; else adb "$@"; fi; }
+
 command -v adb >/dev/null || { echo "adb not on PATH. See docs/TESTING.md." >&2; exit 1; }
 
-if ! adb "${SERIAL[@]}" get-state >/dev/null 2>&1; then
+if ! adb_ get-state >/dev/null 2>&1; then
   echo "No device. Start an emulator or plug one in; \`adb devices\` to check." >&2
   exit 1
 fi
 
-sh_() { adb "${SERIAL[@]}" shell "$@" 2>/dev/null | tr -d '\r'; }
+sh_() { adb_ shell "$@" 2>/dev/null | tr -d '\r'; }
 
 DEVICE=$(sh_ getprop ro.product.model)
 API=$(sh_ getprop ro.build.version.sdk)
@@ -90,12 +95,30 @@ field() { awk -F: -v want="$1" '
   in_summary && index($0, want) { split($2, a, " "); print a[1] + 0; exit }
 ' ; }
 
+# Android 10 and older label the summary total `TOTAL:`, not `TOTAL PSS:`, so
+# field() finds nothing there. The detailed table's TOTAL row leads with Pss
+# Total on every version, so fall back to it.
+total_pss() { awk '$1 == "TOTAL" && $2 ~ /^[0-9]+$/ { print $2; exit }'; }
+
 printf '%-9s %12s %12s %12s %10s %12s\n' \
   elapsed TOTAL_PSS NativeHeap JavaHeap Code MemAvail
 printf '%-9s %12s %12s %12s %10s %12s\n' \
   -------- ------------ ------------ ------------ ---------- ------------
 
 [ -n "$OUT" ] && echo "elapsed_s,total_pss_kb,native_heap_kb,java_heap_kb,code_kb,graphics_kb,mem_available_kb" > "$OUT.csv"
+
+summary() {
+  echo
+  echo "peak TOTAL PSS: $(awk -v k="$PEAK" 'BEGIN{printf "%.0f MB (%d KB)", k/1024, k}')"
+  if [ -n "$OUT" ]; then
+    echo "samples:        $OUT.csv"
+    echo "peak dumpsys:   $OUT.peak.txt"
+  fi
+}
+
+# Ctrl-C is the default way to end a run, so it must print the peak as well;
+# otherwise the one number the run exists to produce is lost.
+trap 'summary; exit 0' INT TERM
 
 START=$(date +%s)
 PEAK=0
@@ -112,14 +135,15 @@ while :; do
     echo
     echo "PROCESS GONE after $(( $(date +%s) - START ))s — peak TOTAL PSS was ${PEAK} KB."
     echo "Reason, if the kernel or ActivityManager logged one:"
-    adb "${SERIAL[@]}" logcat -d -t 400 2>/dev/null \
+    adb_ logcat -d -t 400 2>/dev/null \
       | grep -Ei 'lowmemorykiller|lmkd|Killing .*'"$PACKAGE"'|oom|am_kill' \
       | tail -12 | sed 's/^/  /'
     exit 3
   fi
 
-  MEMINFO=$(adb "${SERIAL[@]}" shell dumpsys meminfo "$PID" 2>/dev/null | tr -d '\r')
+  MEMINFO=$(adb_ shell dumpsys meminfo "$PID" 2>/dev/null | tr -d '\r')
   PSS=$(printf '%s\n' "$MEMINFO"    | field "TOTAL PSS")
+  [ -n "$PSS" ] || PSS=$(printf '%s\n' "$MEMINFO" | total_pss)
   NATIVE=$(printf '%s\n' "$MEMINFO" | field "Native Heap")
   JAVA=$(printf '%s\n' "$MEMINFO"   | field "Java Heap")
   CODE=$(printf '%s\n' "$MEMINFO"   | field "Code")
@@ -146,9 +170,4 @@ while :; do
   sleep "$INTERVAL"
 done
 
-echo
-echo "peak TOTAL PSS: $(awk -v k="$PEAK" 'BEGIN{printf "%.0f MB (%d KB)", k/1024, k}')"
-if [ -n "$OUT" ]; then
-  echo "samples:        $OUT.csv"
-  echo "peak dumpsys:   $OUT.peak.txt"
-fi
+summary
