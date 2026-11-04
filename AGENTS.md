@@ -1,9 +1,202 @@
 # AGENTS.md
 
-The guidance for agents working in this repository lives in
-**[CLAUDE.md](CLAUDE.md)** — architecture, commands, key patterns, and the
-traps that have already cost time here.
+This file provides guidance to AI coding agents (Claude Code, Codex, Antigravity and others) when working with code in this repository. `CLAUDE.md` only imports this file.
 
-This file used to be a second copy of it. The two drifted, which is exactly the
-failure mode a duplicate invites: an agent reading the stale one would have
-been told the dense retrieval leg does not exist. One source, read by everyone.
+## Commands
+
+```bash
+# Get dependencies
+flutter pub get
+
+# Run analysis (zero warnings enforced)
+flutter analyze
+
+# Run tests
+flutter test
+
+# Run a single test file
+flutter test test/services/chunker_service_test.dart
+
+# Code generation (after modifying Riverpod providers with @riverpod annotation)
+flutter pub run build_runner build --delete-conflicting-outputs
+
+# Build release APK (sideloaded, not Play Store)
+flutter build apk --release --target-platform android-arm64
+
+# Build iOS (macOS only; --no-codesign is the CI compile check)
+flutter build ios --release --no-codesign
+
+# Install iOS pods after changing a dependency (macOS only)
+cd ios && pod install && cd ..
+```
+
+## Architecture
+
+```
+UI Layer (Screens/Widgets)
+        ↓ reads/watches providers
+Providers (Riverpod singletons)
+        ↓ inject services
+Services (business logic)
+        ↓
+DatabaseService (SQLite) + flutter_gemma (MediaPipe LLM) + HTTP
+        ↓
+/files/models/gemma-2b-it-cpu-int4.bin  |  /files/docs/{topic}/*.md  |  survive_ai.db
+```
+
+**Two platforms, one codebase.** `android/` and `ios/` are both checked in and
+both ship. Nothing in `lib/` is platform-conditional except
+`PlatformStorage`. See **Platform parity** below and
+[docs/PLATFORM_PARITY.md](docs/PLATFORM_PARITY.md).
+
+**Scope: India.** The corpus, the emergency numbers, the query-expansion
+vocabulary (including romanised Hindi), and the topic taxonomy are all
+India-specific by design. Do not genericise them.
+
+**No business logic in widgets.** Widgets read from providers and dispatch to services only.
+
+## Design Principle: Speed Over Sophistication
+
+**Target device: 6 GB RAM minimum, 8 GB recommended.** Every design decision
+prioritises fast, correct answers over architectural elegance:
+- **2B model** over larger models (first token in seconds, not tens of seconds)
+- **Everything expensive precomputed** — chunking and corpus embedding run offline in `python/`; the phone encodes only the query
+- **Instruction-last prompts** over long system prompts (2B models forget early instructions)
+- **CPU backend** over GPU (pageable RAM vs a shared pool the OS cannot reclaim)
+- **No reranker** — Recall@20 is 98%, so a cross-encoder is 100 MB+ and a second forward pass for 8 points of ordering
+
+## Key Patterns
+
+**RAG pipeline (3-leg + weighted RRF):** Query → (1) BM25 exact via FTS5,
+weight 1.0 + (2) BM25 on the synonym-expanded query, weight 0.7 + (3) cosine
+against shipped EmbeddingGemma vectors, weight 1.5 (skipped entirely for
+romanised Hindi) → RRF merge (K=60) → top 5 passages → prompt → Gemma. The
+turn is owned by `ChatTurnService`, not the widget.
+
+**FTS5 query construction is not optional.** FTS5's implicit operator between
+bare terms is **AND**, so passing a raw sentence to `MATCH` requires every word
+to appear in one chunk and returns nothing for real questions. All queries go
+through `DatabaseService.buildMatchExpression`, which strips stopwords, quotes
+each term (so FTS5 keywords like `OR`/`NEAR` are not parsed as syntax), and
+OR-joins them. There is a regression test; do not bypass this helper.
+
+**`chunks_fts` is an external-content FTS5 table maintained by triggers.** Write
+only to `chunks`. Never insert into `chunks_fts` directly, and never use
+`ConflictAlgorithm.replace` on `chunks` — SQLite's REPLACE skips DELETE
+triggers, orphaning the old index row and appending a duplicate.
+
+**Query expansion:** `QueryExpander` (`lib/utils/query_expander.dart`) with its vocabulary in `lib/utils/expansion_terms.dart` maps survival-domain terms, romanised Hindi ("khoon" → blood, "aag" → fire, "saanp" → snake), and India-specific nouns (LPG, lathi, nala, ORS, ASV) onto the English terms the corpus uses. Without the Hinglish entries, a large share of real Indian queries retrieve nothing. Expansion is capped at 10 terms to avoid query dilution.
+
+**Prompt structure (optimized for 2B):** Prompt is built in `lib/utils/prompt_builder.dart` as plain text (no turn markers — flutter_gemma adds those automatically). Layout is instruction-last: (1) RAG reference material first, (2) conversation history, (3) short instruction (~60 tokens) RIGHT BEFORE the question, (4) question last. This structure ensures the 2B model's attention is focused on the instruction when it starts generating.
+
+**LLM isolation:** All `flutter_gemma` calls go through `LlmService` only. UI never touches the model directly. `flutter_gemma` manages its own background isolate for inference.
+
+**Memory safety:** KV cache is recycled between turns — old session is nulled and closed before the new one allocates. Gemma runs on CPU backend because GPU inference draws from a shared pool the OS cannot reclaim under pressure. Streaming UI updates are batched at 50ms intervals to reduce GC pressure. Stream errors caught via `.handleError()`.
+
+**Offline-first:** No cloud calls at runtime. WiFi-gated sync fetches `manifest.json` from this repo's `main`, downloads changed Markdown docs, rejects any whose SHA-256 does not match, re-indexes via chunker → FTS5. `test/manifest_test.dart` keeps the manifest in step with the guides and `bundledVersion`.
+
+**Embedding service (optional download):** the base `EmbeddingService` has
+`isEnabled` false, so until the 175 MB EmbeddingGemma-300m encoder is fetched
+from Settings, `RagService` runs the two lexical legs only (Recall@5 ≈ 81.5%
+vs 89.7% with the dense leg). Deliberately not part of first-run setup: the
+1.3 GB generator is already between a person and an answer.
+
+**Network: Wi-Fi only.** Every download (model, encoder, manifest, guides) goes
+through `NetworkPolicy.onWifi()`; mobile data counts as offline. Model and
+encoder fallbacks are pinned to a Hugging Face commit with exact byte counts
+and SHA-256 — `DownloadService` compares size for equality, so an approximate
+`sizeBytes` fails every download.
+
+**Database schema:** `docs` (registry + sync state) → `chunks` + `chunks_fts`
+(FTS5 virtual table for BM25) + `citations`. The `chunks.embedding` BLOB holds
+the passage vector that shipped with the index.
+
+**Store the view's own window, not `.buffer`.** Vectors arrive as slices of one
+large file-backed buffer, and `Float32List.buffer` returns the whole backing
+store — writing `embedding.buffer.asUint8List()` gave every passage the entire
+603 KB vector file. Nothing threw: cosine saw mismatched lengths, returned 0.0
+for every pair, and the dense leg ranked every query identically.
+
+**`DatabaseService` takes an optional `databasePath` so tests can drive the
+real class.** They previously rebuilt the schema by hand, so `insertChunks`,
+`deleteChunksForDoc` and `searchFts` were never executed by anything — all
+three named a `chunk_id` column the FTS table does not have, and keyword search
+could not return a row on a device while every test passed. Test through
+`DatabaseService`, not around it.
+
+**Platform parity is enforced by a test, not by discipline.**
+`test/platform_parity_test.dart` reads `android/` and `ios/` as data and asserts
+they still describe the same app: bundle identifier (the Android application id
+with `_` → `-`, because iOS forbids underscores), display name, version source,
+minimum OS, network posture, backup posture, arm64-only, memory headroom, and
+that no asset is bundled by one platform's build system instead of `pubspec`. It
+also scans every plugin podspec and fails if one now needs a higher iOS
+deployment target than `ios/Podfile` declares. It runs on Linux in the ordinary
+`flutter test` job. **When it fails, change the platform file, not the test** —
+a deliberate difference gets recorded in docs/PLATFORM_PARITY.md with its
+reason. The macOS build job (`.github/workflows/ios.yml`) was the other half:
+the parity test proves the iOS project is the same app, the build proves it
+compiles.
+
+**No GitHub Actions workflows while the project is parked.** CI, release,
+device-test and iOS workflows were removed so nothing runs on push, tag or a
+schedule. Nothing checks your work remotely: run `flutter analyze` and
+`flutter test` locally before pushing. Restore all four with
+`git checkout cfadbe6 -- .github/workflows`.
+
+**iOS backup exclusion is not optional.** Android switches backup off wholesale
+with `android:allowBackup="false"`. iOS has no such switch — everything under
+Documents goes to iCloud, which here is a ~1.3 GB model plus a rebuildable
+index. `PlatformStorage.excludeFromBackup()` (method channel to
+`ios/Runner/AppDelegate.swift`) is called by `DownloadService`, `SyncService`
+and `DatabaseService` right after each creates its directory, and is a no-op on
+Android. Do not move these files to `Library/Caches` to avoid the call: iOS
+purges Caches under disk pressure, and an offline safety app that loses its
+model has failed at its only job.
+
+**iOS minimum is 16.0 because the plugins say so**, not as a preference.
+`flutter_gemma` and `flutter_onnxruntime` both declare `s.platform = :ios,
+'16.0'`. The floor is stated in three places — `ios/Podfile`,
+`IPHONEOS_DEPLOYMENT_TARGET` in the Xcode project, and `minimumIosVersion` in
+the parity test — and the test fails if they disagree.
+
+**Zero-Wait RAG:** `SyncService.seedFromAssets()` runs from `main.dart` on **every** launch, independent of the model. It is idempotent (skips topics already at `bundledVersion`). Do not move it back behind the model-download flow — a sideloaded or already-present model then leaves the corpus permanently empty. Bump `SyncService.bundledVersion` whenever the shipped Markdown changes.
+
+## State Management (Riverpod 2.x)
+
+- Services are constructor-injectable `Provider<T>` singletons; no service locators
+- Disposal via `ref.onDispose()`
+- Key state providers: `llmReadyProvider`, `llmErrorProvider`, `modelDownloadProgressProvider`
+- Tests use `sqflite_common_ffi` for in-memory SQLite; mock services with `mockito`
+
+## File Layout
+
+- `lib/services/` — all business logic (no Flutter imports where avoidable)
+- `lib/models/` — pure data classes (`ChatMessage`, `DocChunk`, `DocManifest`)
+- `lib/providers/providers.dart` — Riverpod wiring, singleton lifecycle
+- `lib/models/doc_topic.dart` — the 18 India situations; single source of truth for asset paths, DB topic keys, and RAG filters
+- `lib/utils/prompt_builder.dart` — Instruction-last prompt template for 2B model
+- `lib/utils/query_expander.dart` + `expansion_terms.dart` — synonym and Hinglish expansion
+- `lib/services/platform_storage.dart` — the only platform-conditional code in `lib/`
+- `lib/screens/` — one file per full-page route
+- `lib/widgets/` — reusable UI components (`MessageBubble`, `SyncStatusBanner`)
+
+## Model Config
+
+- Gemma 2B IT, INT4 quantized, CPU backend via `flutter_gemma` (MediaPipe LLM Inference)
+- Model file: `gemma-2b-it-cpu-int4.bin` (1,346,559,040 bytes, ~1.3 GB)
+- Sampling: temp=0.7, top_k=40
+- **`maxTokens` in flutter_gemma is the FULL context window (prompt + reply), not an output cap.** It is `kContextTokens` in `llm_service.dart`.
+- Token budget: `kMaxPromptTokens` = 2048 context − 512 reserved output − 84 safety = 1452 prompt tokens. `PromptBuilder` derives its budget from this constant so the two cannot drift.
+- Android: `minSdk 24`, `abiFilters: ["arm64-v8a"]`, `largeHeap="true"`
+- iOS: deployment target 16.0, arm64 only, `increased-memory-limit` +
+  `extended-virtual-addressing` entitlements (the `largeHeap` analogue). The
+  entitlements only take effect on a signed build, so a simulator run proves
+  nothing about memory behaviour.
+
+## Content and model updates
+
+Both are driven by `manifest.json`, not by an APK release:
+- Manifest URL: `kManifestUrl` in `sync_service.dart`, overridable with `--dart-define=SURVIVE_AI_MANIFEST_URL=...`
+- The manifest's `model` entry (url, size_bytes, sha256, version) wins over the compiled-in fallbacks in `setup_screen.dart`, so the model can be swapped without shipping a build.
+- Model downloads are resumable and verified: size check, then streaming SHA-256. A partial download is only resumed when its sidecar `.part.json` proves it came from the same URL and expected content.
